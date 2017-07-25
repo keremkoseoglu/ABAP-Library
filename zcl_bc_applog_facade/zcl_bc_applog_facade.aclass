@@ -1,7 +1,7 @@
 CLASS zcl_bc_applog_facade DEFINITION
   PUBLIC
   FINAL
-  CREATE PUBLIC ..
+  CREATE PUBLIC .
 
   PUBLIC SECTION.
 

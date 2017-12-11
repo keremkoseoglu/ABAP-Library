@@ -22,9 +22,9 @@ public section.
       END OF t_dynpro_attr .
   types:
     tt_dynpro_attr TYPE HASHED TABLE OF t_dynpro_attr
-                               WITH UNIQUE KEY primary_key COMPONENTS dylang
-                                                                      dyname
-                                                                      dynumb .
+                                 WITH UNIQUE KEY primary_key COMPONENTS dylang
+                                                                        dyname
+                                                                        dynumb .
 
   constants C_DISPLAY_MODE_POPUP type ZBCD_LOG_DISP value 'P' ##NO_TEXT.
   constants C_DISPLAY_MODE_POPUP_LIGHT type ZBCD_LOG_DISP value 'L' ##NO_TEXT.
@@ -36,6 +36,13 @@ public section.
   constants C_ICON_YELLOW type ICON_D value '@5D@' ##NO_TEXT.
   class-data GT_DYNPRO_ATTR type TT_DYNPRO_ATTR .
 
+  class-methods APPL_LOG_DISPLAY
+    importing
+      !IV_OBJECT type BALHDR-OBJECT
+      !IV_SUBOBJECT type BALHDR-SUBOBJECT
+      !IV_EXTERNAL_NUMBER type BALHDR-EXTNUMBER optional
+      !IV_SUPPRESS_SELECTION_DIALOG type CHAR1 default 'X'
+      !IV_DATE_FROM type DATUM optional .
   class-methods ARE_YOU_SURE
     importing
       !IV_TEXT type CLIKE
@@ -83,6 +90,11 @@ public section.
       !IV_MSGTY type SYMSGTY
     returning
       value(RV_ICON) type ICON_D .
+  class-methods GET_TRKORR_LIST_FROM_USER
+    importing
+      !IV_LINE type TXW_NOTE-LINE optional
+    returning
+      value(RT_TRKORR) type ZCL_BC_TRANSPORT_REQUEST=>TT_TRKORR .
 *-- mehmet sertkaya
   class-methods SAPGUI_MESS
     importing
@@ -141,7 +153,8 @@ public section.
       value(RS_RETURN) type T_DYNPRO_ATTR .
   class-methods DOWNLOAD_EXCEL_TEMPLATE
     importing
-      !IV_STR type DD02L-TABNAME .
+      !IV_STR type DD02L-TABNAME
+      value(IT_COL) type ZBCTT_COLUMN_EXCEL optional .
   class-methods DOWNLOAD_FILE
     importing
       value(IV_FILENAME) type STRING optional
@@ -151,7 +164,7 @@ public section.
       !IR_FILEDATA type ref to DATA
       !IV_DEF_EXTENSION type STRING default '.TXT'
       !IV_DEF_FILENAME type STRING optional
-      !IV_TITLE type STRING default 'Backup' ##NO_TEXT
+      !IV_TITLE type STRING default 'Backup'   ##NO_TEXT
     raising
       ZCX_BC_SYMSG
       ZCX_BC_USER_INPUT .
@@ -173,25 +186,62 @@ public section.
       !IV_STRUCTURE_NAME type DD02L-TABNAME
     returning
       value(RT_DEF) type TCACS_DD03P .
+  class-methods DEEP_CX_ROOT
+    importing
+      !IV_COUNT type INT4 default 100
+    changing
+      !CX_ROOT type ref to CX_ROOT .
   PROTECTED SECTION.
-  PRIVATE SECTION.
+private section.
 
-    TYPES: BEGIN OF t_fsd,
-             filename    TYPE string,
-             path        TYPE string,
-             fullpath    TYPE string,
-             user_action TYPE i,
-           END OF t_fsd.
+  types:
+    BEGIN OF t_fsd,
+        filename    TYPE string,
+        path        TYPE string,
+        fullpath    TYPE string,
+        user_action TYPE i,
+      END OF t_fsd .
+  types:
+    tt_txw_note TYPE STANDARD TABLE OF txw_note WITH DEFAULT KEY .
 
-    CONSTANTS:
-      c_answer_yes(1) VALUE 'J' ##NO_TEXT,
-      c_option_eq     TYPE ddoption VALUE 'EQ',
-      c_sign_i        TYPE ddsign   VALUE 'I'.
+  constants:
+    c_answer_yes(1) value 'J' ##NO_TEXT.
+  constants C_OPTION_EQ type DDOPTION value 'EQ' ##NO_TEXT.
+  constants C_SIGN_I type DDSIGN value 'I' ##NO_TEXT.
 ENDCLASS.
 
 
 
 CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
+
+
+  METHOD appl_log_display.
+
+    DATA : lv_date_from TYPE balhdr-aldate.
+
+    IF iv_date_from NE '00000000'.
+      lv_date_from  = iv_date_from.
+    ELSE.
+      lv_date_from  = sy-datum - 365."son bir yıl
+    ENDIF.
+
+    CALL FUNCTION 'APPL_LOG_DISPLAY'
+      EXPORTING
+        object                    = iv_object
+        subobject                 = iv_subobject
+        external_number           = iv_external_number
+        suppress_selection_dialog = iv_suppress_selection_dialog
+        date_from                 = lv_date_from
+*     IMPORTING
+*       NUMBER_OF_PROTOCOLS       =
+      EXCEPTIONS
+        no_authority              = 1
+        OTHERS                    = 2.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+  ENDMETHOD.
 
 
   METHOD are_you_sure.
@@ -201,7 +251,7 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
     CALL FUNCTION 'POPUP_CONTINUE_YES_NO'
       EXPORTING
         textline1 = iv_text
-        titel     = text-608
+        titel     = TEXT-608
       IMPORTING
         answer    = lv_answer.
 
@@ -369,10 +419,10 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
               EXCEPTIONS
                 invalid_number = 1
                 OTHERS         = 2 ##FM_SUBRC_OK.
+
             zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'OIU_ME_CHAR_TO_NUMBER' ).
-            IF sy-subrc EQ 0.
-              cv_target  = lv_float.
-            ENDIF.
+
+            cv_target = lv_float.
 
           CATCH cx_root INTO DATA(lo_cx).
             RAISE EXCEPTION lo_cx.
@@ -397,86 +447,101 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
   ENDMETHOD.
 
 
-  method convert_any_input_to_output.
+  METHOD convert_any_input_to_output.
 
-    data: lv_field_type type c.
-    data: lv_decimals_target type i.
-    data: lv_fmname type char80.
-    field-symbols: <fs_type_x> type x.
+    DATA: lv_field_type TYPE c.
+    DATA: lv_decimals_target TYPE i.
+    DATA: lv_fmname TYPE char80.
+    FIELD-SYMBOLS: <fs_type_x> TYPE x.
 
-    if iv_refvalue is not initial.
-      if iv_datatype eq 'CURR'.
-       write iv_source to cv_target currency iv_refvalue.
-       condense cv_target.
-       return.
-      elseif iv_datatype eq 'QUAN'.
-       write iv_source to cv_target unit iv_refvalue.
-       condense cv_target.
-       return.
-      endif.
-    endif.
+    IF iv_refvalue IS NOT INITIAL.
+      IF iv_datatype EQ 'CURR'.
+        WRITE iv_source TO cv_target CURRENCY iv_refvalue.
+        CONDENSE cv_target.
+        RETURN.
+      ELSEIF iv_datatype EQ 'QUAN'.
+        WRITE iv_source TO cv_target UNIT iv_refvalue.
+        CONDENSE cv_target.
+        RETURN.
+      ENDIF.
+    ENDIF.
 
-    describe field iv_source type lv_field_type.
+    DESCRIBE FIELD iv_source TYPE lv_field_type.
 
-    if iv_convexit is not initial.
-      concatenate  'CONVERSION_EXIT_'
+    IF iv_convexit IS NOT INITIAL.
+      CONCATENATE  'CONVERSION_EXIT_'
                  iv_convexit
-                 '_OUTPUT' into lv_fmname.
+                 '_OUTPUT' INTO lv_fmname.
 
-      call function lv_fmname
-        exporting
+      CALL FUNCTION lv_fmname
+        EXPORTING
           input  = iv_source
-        importing
+        IMPORTING
           output = cv_target
-        exceptions
-          others = 1 ##FM_SUBRC_OK.
-      return.
-    endif.
-    case lv_field_type.
-      when 'C'.
+        EXCEPTIONS
+          OTHERS = 1 ##FM_SUBRC_OK.
+      RETURN.
+    ENDIF.
+    CASE lv_field_type.
+      WHEN 'C'.
         cv_target = iv_source.
 
-      when 'D'.
-        write iv_source to cv_target dd/mm/yyyy.
+      WHEN 'D'.
+        WRITE iv_source TO cv_target DD/MM/YYYY.
 
-      when 'T'.
-        write iv_source to cv_target environment time format.
-      when 'X'.
-        assign iv_source to <fs_type_x> .
+      WHEN 'T'.
+        WRITE iv_source TO cv_target ENVIRONMENT TIME FORMAT.
+      WHEN 'X'.
+        ASSIGN iv_source TO <fs_type_x> .
         cv_target = <fs_type_x> .
-      when 'N'.
-        data : lv_int type i.
+      WHEN 'N'.
+        DATA : lv_int TYPE i.
         lv_int = iv_source.
         cv_target = lv_int.
-        condense cv_target.
-      when 'I'.
+        CONDENSE cv_target.
+      WHEN 'I'.
         cv_target = iv_source.
-        condense cv_target.
-      when 'P'.
-        describe field iv_source decimals lv_decimals_target.
-        write iv_source to cv_target decimals lv_decimals_target.
-      when 'F'.
-        data : lv_decimalx type p decimals 3.
+        CONDENSE cv_target.
+      WHEN 'P'.
+        DESCRIBE FIELD iv_source DECIMALS lv_decimals_target.
+        WRITE iv_source TO cv_target DECIMALS lv_decimals_target.
+      WHEN 'F'.
+        DATA : lv_decimalx TYPE p DECIMALS 3.
 
-        call function 'MURC_ROUND_FLOAT_TO_PACKED'
-          exporting
+        CALL FUNCTION 'MURC_ROUND_FLOAT_TO_PACKED'
+          EXPORTING
             if_float  = iv_source
-          importing
+          IMPORTING
             ef_packed = lv_decimalx
-          exceptions
+          EXCEPTIONS
             overflow  = 1
-            others    = 2.
-        if sy-subrc <> 0.
+            OTHERS    = 2.
+        IF sy-subrc <> 0.
           rv_subrc = 4.
-          return.
-        endif.
+          RETURN.
+        ENDIF.
 
-        write lv_decimalx to cv_target decimals 3.
-        condense cv_target.
+        WRITE lv_decimalx TO cv_target DECIMALS 3.
+        CONDENSE cv_target.
 
-      when others.
+      WHEN OTHERS.
         cv_target = iv_source.
-    endcase.
+    ENDCASE.
+  ENDMETHOD.
+
+
+  method deep_cx_root.
+    try.
+       do iv_count times.
+        if cx_root->previous is not initial.
+           cx_root = cx_root->previous .
+        else.
+           exit.
+        endif.
+       enddo.
+     catch cx_root ##NO_HANDLER.
+     endtry.
+
   endmethod.
 
 
@@ -530,9 +595,9 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
     ENDCASE.
 
     ls_display_profile-use_grid = iv_grid.
-    ls_display_profile-title = text-001.
+    ls_display_profile-title = TEXT-001.
     ls_display_profile-tree_ontop = iv_tree_ontop.
-    ls_display_profile-head_text = text-001.
+    ls_display_profile-head_text = TEXT-001.
     ls_display_profile-head_size = 35.
     ls_display_profile-tree_size = 22.
     ls_display_profile-show_all = iv_showall.
@@ -671,7 +736,7 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
 
       TRY.
           DATA(lo_req) = zcl_bc_transport_request=>get_instance( <ls_trkorr>-trkorr ).
-          datA(ls_content) = lo_req->get_content( ).
+          DATA(ls_content) = lo_req->get_content( ).
 
           APPEND VALUE #(
             h              = CORRESPONDING #( lo_req->get_header( ) )
@@ -689,103 +754,111 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
     CALL FUNCTION 'TRINT_DISPLAY_REQUESTS'
       EXPORTING
         it_requests        = lt_req
-        iv_first_node_text = text-013.
+        iv_first_node_text = TEXT-013.
 
   ENDMETHOD.
 
 
-  METHOD download_excel_template.
+  method download_excel_template.
 
-    DATA : lt_fcat     TYPE lvc_t_fcat,
-           lt_fcat_t   TYPE lvc_t_fcat,
-           lr_dy_table TYPE REF TO data,
-           lr_dy_line  TYPE REF TO data.
+    data : lt_fcat     type lvc_t_fcat,
+           lt_fcat_t   type lvc_t_fcat,
+           lr_dy_table type ref to data,
+           lr_dy_line  type ref to data.
 
-    FIELD-SYMBOLS : <lt_column> TYPE STANDARD TABLE,
-                    <ls_column> TYPE any.
+    field-symbols : <lt_column> type standard table,
+                    <ls_column> type any.
 
+    sort it_col by fieldname.
 
-    CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
-      EXPORTING
+    call function 'LVC_FIELDCATALOG_MERGE'
+      exporting
 *       I_BUFFER_ACTIVE        =
         i_structure_name       = iv_str
 *       I_CLIENT_NEVER_DISPLAY = 'X'
 *       I_BYPASSING_BUFFER     =
 *       I_INTERNAL_TABNAME     =
-      CHANGING
+      changing
         ct_fieldcat            = lt_fcat
-      EXCEPTIONS
+      exceptions
         inconsistent_interface = 1
         program_error          = 2
-        OTHERS                 = 3.
-    IF sy-subrc <> 0.
-      MESSAGE ID sy-msgid TYPE 'I' NUMBER sy-msgno
-                     WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
-                     DISPLAY LIKE 'E'.
-    ELSE.
+        others                 = 3.
+    if sy-subrc <> 0.
+      message id sy-msgid type 'I' number sy-msgno
+                     with sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+                     display like 'E'.
+    else.
 
-      LOOP AT lt_fcat ASSIGNING FIELD-SYMBOL(<ls_fcat>).
-        APPEND INITIAL LINE TO lt_fcat_t ASSIGNING FIELD-SYMBOL(<ls_fcat_t>).
+      loop at lt_fcat assigning field-symbol(<ls_fcat>).
+        append initial line to lt_fcat_t assigning field-symbol(<ls_fcat_t>).
         <ls_fcat_t>-fieldname = <ls_fcat>-fieldname.
         <ls_fcat_t>-datatype  = 'CHAR'.
         <ls_fcat_t>-inttype   = 'C'  .
         <ls_fcat_t>-intlen    = 50   .
-      ENDLOOP.
+      endloop.
 
 *     Dinamik tablo oluştur
-      CALL METHOD cl_alv_table_create=>create_dynamic_table
-        EXPORTING
+      call method cl_alv_table_create=>create_dynamic_table
+        exporting
           it_fieldcatalog = lt_fcat_t[]
-        IMPORTING
+        importing
           ep_table        = lr_dy_table.
-      ASSIGN lr_dy_table->* TO <lt_column>.
+      assign lr_dy_table->* to <lt_column>.
 
 *     dinamik satır yapısını oluştur
-      CREATE DATA lr_dy_line LIKE LINE OF <lt_column>.
-      ASSIGN lr_dy_line->* TO <ls_column>.
+      create data lr_dy_line like line of <lt_column>.
+      assign lr_dy_line->* to <ls_column>.
 
-      CHECK sy-subrc EQ 0.
+      check sy-subrc eq 0.
 
-      APPEND INITIAL LINE TO <lt_column> ASSIGNING <ls_column>.
-      LOOP AT lt_fcat ASSIGNING <ls_fcat>.
-        ASSIGN COMPONENT <ls_fcat>-fieldname OF STRUCTURE <ls_column> TO FIELD-SYMBOL(<lv_column>).
-        <lv_column> = <ls_fcat>-scrtext_l.
-      ENDLOOP.
+      append initial line to <lt_column> assigning <ls_column>.
+      loop at lt_fcat assigning <ls_fcat>.
+        assign component <ls_fcat>-fieldname of structure <ls_column> to field-symbol(<lv_column>).
+        read table it_col with key fieldname = <ls_fcat>-fieldname
+                          assigning field-symbol(<ls_col>) binary search.
+        if sy-subrc eq 0.
+          <lv_column> = <ls_col>-fieldtext.
+        else.
+          <lv_column> = <ls_fcat>-scrtext_l.
+        endif.
 
-      APPEND INITIAL LINE TO <lt_column> ASSIGNING <ls_column>.
-      LOOP AT lt_fcat ASSIGNING <ls_fcat>.
-        ASSIGN COMPONENT <ls_fcat>-fieldname OF STRUCTURE <ls_column> TO <lv_column>.
-        SHIFT <ls_fcat>-intlen LEFT DELETING LEADING '0'.
+      endloop.
+
+      append initial line to <lt_column> assigning <ls_column>.
+      loop at lt_fcat assigning <ls_fcat>.
+        assign component <ls_fcat>-fieldname of structure <ls_column> to <lv_column>.
+        shift <ls_fcat>-intlen left deleting leading '0'.
         <lv_column> = |{ <ls_fcat>-datatype }{ <ls_fcat>-intlen }|.
-      ENDLOOP.
+      endloop.
 
-      zcl_bc_gui_toolkit=>download_file( REF #( <lt_column> ) ).
-    ENDIF.
-
-  ENDMETHOD.
-
-
-  method download_file.
-
-    field-symbols : <lt_filedata> type standard table.
-
-    assign ir_filedata->* to <lt_filedata>.
-    check sy-subrc eq 0.
-    if iv_filename is initial.
-     try.
-        cl_gui_frontend_services=>directory_browse(
-                            exporting window_title = conv #( text-003 )
-                            changing selected_folder = iv_filename ).
-      catch cx_root into data(lx_root).
-       message lx_root type 'S' display like 'E'.
-       return.
-      endtry.
-      check iv_filename is not initial.
-
-      concatenate iv_filename '\template.xls' into iv_filename.
+      zcl_bc_gui_toolkit=>download_file( ref #( <lt_column> ) ).
     endif.
-    call function 'GUI_DOWNLOAD'
-      exporting
+
+  endmethod.
+
+
+  METHOD download_file.
+
+    FIELD-SYMBOLS : <lt_filedata> TYPE STANDARD TABLE.
+
+    ASSIGN ir_filedata->* TO <lt_filedata>.
+    CHECK sy-subrc EQ 0.
+    IF iv_filename IS INITIAL.
+      TRY.
+          cl_gui_frontend_services=>directory_browse(
+                              EXPORTING window_title = CONV #( TEXT-003 )
+                              CHANGING selected_folder = iv_filename ).
+        CATCH cx_root INTO DATA(lx_root).
+          MESSAGE lx_root TYPE 'S' DISPLAY LIKE 'E'.
+          RETURN.
+      ENDTRY.
+      CHECK iv_filename IS NOT INITIAL.
+
+      CONCATENATE iv_filename '\template.xls' INTO iv_filename.
+    ENDIF.
+    CALL FUNCTION 'GUI_DOWNLOAD'
+      EXPORTING
 *       BIN_FILESIZE            =
         filename                = iv_filename
 *       FILETYPE                = 'ASC'
@@ -800,7 +873,7 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
 *       DAT_MODE                = ' '
 *       CONFIRM_OVERWRITE       = ' '
 *       NO_AUTH_CHECK           = ' '
-*       CODEPAGE                = ' '
+*        CODEPAGE                = '1616'
 *       IGNORE_CERR             = ABAP_TRUE
 *       REPLACEMENT             = '#'
 *       WRITE_BOM               = ' '
@@ -814,10 +887,10 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
 *       VIRUS_SCAN_PROFILE      = '/SCET/GUI_DOWNLOAD'
 *   IMPORTING
 *       FILELENGTH              =
-      tables
+      TABLES
         data_tab                = <lt_filedata>
 *       FIELDNAMES              =
-      exceptions
+      EXCEPTIONS
         file_write_error        = 1
         no_batch                = 2
         gui_refuse_filetransfer = 3
@@ -839,18 +912,18 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
         file_not_found          = 19
         dataprovider_exception  = 20
         control_flush_error     = 21
-        others                  = 22.
+        OTHERS                  = 22.
 
-    if sy-subrc <> 0.
-      message id sy-msgid type 'I' number sy-msgno
-                     with sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
-                     display like 'E'.
-    else.
-      message i000(l1) with iv_filename text-004 ##MG_MISSING.
-    endif.
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE 'I' NUMBER sy-msgno
+                     WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+                     DISPLAY LIKE 'E'.
+    ELSE.
+      MESSAGE i000(l1) WITH iv_filename TEXT-004 ##MG_MISSING.
+    ENDIF.
 
 
-  endmethod.
+  ENDMETHOD.
 
 
   METHOD download_file_with_dialog.
@@ -967,7 +1040,8 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
       CHANGING
         desktop_directory = lv_desktop
       EXCEPTIONS
-        cntl_error        = 1.
+        cntl_error        = 1
+        ##SUBRC_OK.
 
     CALL METHOD cl_gui_cfw=>update_view.
 
@@ -1063,6 +1137,38 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
       INSERT ls_dynpro_attr INTO TABLE gt_dynpro_attr ASSIGNING <ls_dynpro_attr>.
     ENDIF.
     rs_return = <ls_dynpro_attr>.
+  ENDMETHOD.
+
+
+  METHOD get_trkorr_list_from_user.
+
+    DATA(lv_intro) = COND text72(
+        WHEN iv_line IS NOT INITIAL
+        THEN iv_line
+        ELSE TEXT-052
+    ).
+
+    DATA(lt_note) = VALUE tt_txw_note(
+        ( line = lv_intro  )
+        ( line = space )
+    ).
+
+    CALL FUNCTION 'TXW_TEXTNOTE_EDIT'
+      TABLES
+        t_txwnote = lt_note.
+
+    LOOP AT lt_note
+        INTO DATA(ls_line)
+        WHERE (
+            line IS NOT INITIAL AND
+            line NE lv_intro
+        ).
+
+      CONDENSE ls_line-line.
+      APPEND VALUE #( trkorr = ls_line-line ) TO rt_trkorr.
+
+    ENDLOOP.
+
   ENDMETHOD.
 
 
@@ -1183,7 +1289,7 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
 
     CALL FUNCTION 'MD_POPUP_SHOW_INTERNAL_TABLE' ##FM_SUBRC_OK
       EXPORTING
-        title   = text-001
+        title   = TEXT-001
 *    importing
 *       index   =
       TABLES
@@ -1220,7 +1326,7 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
 
     CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
       EXPORTING
-        i_title               = text-002
+        i_title               = TEXT-002
         i_selection           = abap_false
         i_screen_start_line   = 3
         i_screen_end_line     = 30
@@ -1329,139 +1435,139 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
   ENDMETHOD.
 
 
-  method upload_excel_file_data.
+  METHOD upload_excel_file_data.
 
-    data: lt_tabcde     type table of alsmex_tabline,
-          ls_tabcde     type alsmex_tabline,
-          lv_file       type rlgrap-filename,
-          lv_line       type i,
+    DATA: lt_tabcde     TYPE TABLE OF alsmex_tabline,
+          ls_tabcde     TYPE alsmex_tabline,
+          lv_file       TYPE rlgrap-filename,
+          lv_line       TYPE i,
 *          lv_line_excel type i,
-          lv_tind(4)    type n,
-          lo_line       type ref to data,
-          lt_definition type standard table of dd03p,
-          ls_dd02v_n    type dd02v,
-          lv_fname      type rs38l_fnam.
+          lv_tind(4)    TYPE n,
+          lo_line       TYPE REF TO data,
+          lt_definition TYPE STANDARD TABLE OF dd03p,
+          ls_dd02v_n    TYPE dd02v,
+          lv_fname      TYPE rs38l_fnam.
 
 
-    if iv_filename is not  initial.
+    IF iv_filename IS NOT  INITIAL.
       lv_file = iv_filename.
-    else.
-      lv_file = conv rlgrap-filename( get_file( ) ) ##OPERATOR.
-    endif.
+    ELSE.
+      lv_file = CONV rlgrap-filename( get_file( ) ) ##OPERATOR.
+    ENDIF.
 
-    if iv_line is initial.
+    IF iv_line IS INITIAL.
       lv_line = 1.
-    else.
+    ELSE.
       lv_line = iv_line.
-    endif.
+    ENDIF.
 
 
-    call function 'ALSM_EXCEL_TO_INTERNAL_TABLE' ##FM_SUBRC_OK
-      exporting
+    CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE' ##FM_SUBRC_OK
+      EXPORTING
         filename                = lv_file
         i_begin_col             = 1
         i_begin_row             = lv_line
         i_end_col               = 999
         i_end_row               = 999999
-      tables
+      TABLES
         intern                  = lt_tabcde
-      exceptions
+      EXCEPTIONS
         inconsistent_parameters = 1
         upload_ole              = 2
-        others                  = 3.
+        OTHERS                  = 3.
 
 *--------------------------------------------------------------------*
 * Tablonun detayını al
 *--------------------------------------------------------------------*
-    call function 'DD_INT_TABL_GET'
-      exporting
+    CALL FUNCTION 'DD_INT_TABL_GET'
+      EXPORTING
         tabname        = iv_structure_name
-      importing
+      IMPORTING
         dd02v_n        = ls_dd02v_n
-      tables
+      TABLES
         dd03p_n        = lt_definition
-      exceptions
+      EXCEPTIONS
         internal_error = 1.
 
-    if sy-subrc eq 0 and lines( lt_definition ) gt 0.
+    IF sy-subrc EQ 0 AND lines( lt_definition ) GT 0.
 
-      call function 'DD_TABL_EXPAND' ##FM_SUBRC_OK
-        exporting
+      CALL FUNCTION 'DD_TABL_EXPAND' ##FM_SUBRC_OK
+        EXPORTING
           dd02v_wa          = ls_dd02v_n
           mode              = 46
           prid              = 0
-        tables
+        TABLES
           dd03p_tab         = lt_definition
-        exceptions
+        EXCEPTIONS
           illegal_parameter = 1.
 
-    endif.
+    ENDIF.
 
-    if lines( lt_definition ) eq 0.
-      raise error_structure_read.
-    endif.
+    IF lines( lt_definition ) EQ 0.
+      RAISE error_structure_read.
+    ENDIF.
 
-    delete lt_definition where fieldname eq '.INCLUDE'.
+    DELETE lt_definition WHERE fieldname EQ '.INCLUDE'.
 *--------------------------------------------------------------------*
 * MAPPING
 *--------------------------------------------------------------------*
-    field-symbols : <fs_value> type any,
-                    <fs_table> type standard table,
-                    <fs_lines> type any.
+    FIELD-SYMBOLS : <fs_value> TYPE any,
+                    <fs_table> TYPE STANDARD TABLE,
+                    <fs_lines> TYPE any.
 
 *    assign rt_table->* to <fs_table>.
-    assign ct_table to <fs_table>.
+    ASSIGN ct_table TO <fs_table>.
 *    check sy-subrc eq 0.
 *
-    create data lo_line like line of <fs_table>.
-    assign lo_line->* to <fs_lines>.
-    check sy-subrc eq 0.
+    CREATE DATA lo_line LIKE LINE OF <fs_table>.
+    ASSIGN lo_line->* TO <fs_lines>.
+    CHECK sy-subrc EQ 0.
 
-    loop at lt_tabcde into ls_tabcde.
+    LOOP AT lt_tabcde INTO ls_tabcde.
       lv_tind = ls_tabcde-col.
 *      lv_line_excel = ls_tabcde-row.
 *      check lv_line_excel ge l1v_line.
-      read table lt_definition assigning field-symbol(<fs_definition>) index lv_tind.
-      if sy-subrc eq 0.
-        assign component <fs_definition>-fieldname
-               of structure <fs_lines> to <fs_value>.
-        if sy-subrc eq 0.
+      READ TABLE lt_definition ASSIGNING FIELD-SYMBOL(<fs_definition>) INDEX lv_tind.
+      IF sy-subrc EQ 0.
+        ASSIGN COMPONENT <fs_definition>-fieldname
+               OF STRUCTURE <fs_lines> TO <fs_value>.
+        IF sy-subrc EQ 0.
 *--------------------------------------------------------------------*
 * Dönüşüm işlemi...
 *--------------------------------------------------------------------*
-          try.
-              convert_any_input_to_data( exporting iv_source = ls_tabcde-value
-                                         changing  cv_target = <fs_value> ).
-            catch cx_root into data(lo_cx).
-              message lo_cx->previous type 'S' display like 'E'.
-              raise conversion_error.
+          TRY.
+              convert_any_input_to_data( EXPORTING iv_source = ls_tabcde-value
+                                         CHANGING  cv_target = <fs_value> ).
+            CATCH cx_root INTO DATA(lo_cx).
+              MESSAGE lo_cx->previous TYPE 'S' DISPLAY LIKE 'E'.
+              RAISE conversion_error.
 
-          endtry.
+          ENDTRY.
 
-          if <fs_definition>-convexit is not initial and
-             <fs_definition>-inttype ne 'P'.
+          IF <fs_definition>-convexit IS NOT INITIAL AND
+             <fs_definition>-inttype NE 'P'.
             lv_fname = 'CONVERSION_EXIT_' &&
                        <fs_definition>-convexit &&
                        '_INPUT'.
 
-            call function lv_fname ##FM_SUBRC_OK
-              exporting
+            CALL FUNCTION lv_fname ##FM_SUBRC_OK
+              EXPORTING
                 input  = <fs_value>
-              importing
+              IMPORTING
                 output = <fs_value>
-              exceptions
-                others = 1.
+              EXCEPTIONS
+                OTHERS = 1.
 
-          endif.
-        endif.
-      endif.
+          ENDIF.
+        ENDIF.
+      ENDIF.
 
-      at end of row.
-        append <fs_lines> to <fs_table>.
-        clear <fs_lines>.
-      endat.
-    endloop.
-  endmethod.
+      AT END OF row.
+        APPEND <fs_lines> TO <fs_table>.
+        CLEAR <fs_lines>.
+      ENDAT.
+    ENDLOOP.
+  ENDMETHOD.
 
 
   METHOD write_cx_msg_matryoshka.

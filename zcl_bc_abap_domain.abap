@@ -90,7 +90,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_abap_domain IMPLEMENTATION.
+CLASS ZCL_BC_ABAP_DOMAIN IMPLEMENTATION.
 
 
   METHOD ensure_text_read.
@@ -218,6 +218,7 @@ CLASS zcl_bc_abap_domain IMPLEMENTATION.
     rv_text = get_value_line( iv_value )-text.
   ENDMETHOD.
 
+
   method get_value_text_safe.
 
     try.
@@ -227,6 +228,7 @@ CLASS zcl_bc_abap_domain IMPLEMENTATION.
     endtry.
 
   endmethod.
+
 
   METHOD validate_value.
 
@@ -262,5 +264,4 @@ CLASS zcl_bc_abap_domain IMPLEMENTATION.
     ENDIF.
 
   ENDMETHOD.
-
 ENDCLASS.

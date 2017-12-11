@@ -7,6 +7,15 @@ CLASS zcl_sd_customer DEFINITION
 
     CONSTANTS c_fnam_kunnr TYPE fieldname VALUE 'KUNNR'.
 
+    TYPES:
+      tt_kunnr
+        TYPE STANDARD TABLE OF kunnr
+        WITH DEFAULT KEY,
+
+      tt_parob
+        TYPE STANDARD TABLE OF zsdt_cus_parob
+        WITH DEFAULT KEY.
+
     DATA gs_def TYPE kna1 READ-ONLY.
 
     CLASS-METHODS:
@@ -17,35 +26,89 @@ CLASS zcl_sd_customer DEFINITION
         RAISING
           zcx_bc_class_method,
 
+      ensure_obl_part_funcs_filled
+        IMPORTING
+          !it_vkorg TYPE zcl_sd_sales_org=>tt_vkorg
+          !it_parob TYPE tt_parob
+        RAISING
+          zcx_sd_parob,
+
+      get_hq_branch_codes
+        IMPORTING
+          !iv_need_hq     TYPE abap_bool DEFAULT abap_true
+          !iv_need_br     TYPE abap_bool DEFAULT abap_true
+          !it_bukrs       TYPE tpmy_range_bukrs OPTIONAL
+          !it_knrze       TYPE range_kunnr_tab OPTIONAL
+        RETURNING
+          VALUE(rt_kunnr) TYPE tt_kunnr,
+
       get_instance
         IMPORTING !iv_kunnr     TYPE kunnr
         RETURNING VALUE(ro_obj) TYPE REF TO zcl_sd_customer
-        RAISING   zcx_bc_table_content,
+        RAISING   zcx_sd_customer_def,
 
       get_kna1
         IMPORTING !iv_kunnr      TYPE kunnr
         RETURNING VALUE(rs_kna1) TYPE kna1 ,
 
-      GET_KNVV
-        importing
-          !IV_KUNNR type KNVV-KUNNR
-          !IV_VKORG type KNVV-VKORG
-          !IV_VTWEG type KNVV-VTWEG
-          !IV_SPART type KNVV-SPART
-        returning
-          value(RS_KNVV) type KNVV,
+      get_knvv
+        IMPORTING
+          !iv_kunnr      TYPE knvv-kunnr
+          !iv_vkorg      TYPE knvv-vkorg
+          !iv_vtweg      TYPE knvv-vtweg
+          !iv_spart      TYPE knvv-spart
+        RETURNING
+          VALUE(rs_knvv) TYPE knvv,
 
       get_name1
         IMPORTING
           !iv_kunnr       TYPE kunnr
         RETURNING
-          VALUE(rv_name1) TYPE name1_gp.
+          VALUE(rv_name1) TYPE name1_gp,
 
+      set_head_customer_if_found
+        IMPORTING !iv_bukrs TYPE bukrs
+        CHANGING  !cv_kunnr TYPE kunnr.
+
+
+    METHODS:
+      get_head_customer
+        IMPORTING !iv_bukrs      TYPE bukrs
+        RETURNING VALUE(ro_head) TYPE REF TO zcl_sd_customer
+        RAISING   zcx_sd_customer_hq_def,
+
+      get_Transport_zone
+        returning value(ro_obj) type ref to zcl_Sd_transport_zone
+        raising   zcx_sd_tzone.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
 
     TYPES:
+      BEGIN OF t_clazy_flg,
+        parob TYPE abap_bool,
+      END OF t_clazy_flg,
+
+      BEGIN OF t_clazy_val,
+        parob TYPE tt_parob,
+      END OF t_clazy_val,
+
+      BEGIN OF t_clazy,
+        flg TYPE t_clazy_flg,
+        val TYPE t_clazy_val,
+      END OF t_clazy,
+
+      BEGIN OF t_hq,
+        bukrs TYPE bukrs,
+        knrze TYPE knrze,
+        obj   TYPE REF TO zcl_sd_customer,
+        cx    TYPE REF TO zcx_sd_customer_hq_def,
+      END OF t_hq,
+
+      tt_hq
+        TYPE HASHED TABLE OF t_hq
+        WITH UNIQUE KEY primary_key COMPONENTS bukrs,
+
       tt_knvv
         TYPE HASHED TABLE OF knvv
         WITH UNIQUE KEY primary_key COMPONENTS kunnr vkorg vtweg spart,
@@ -66,15 +129,18 @@ CLASS zcl_sd_customer DEFINITION
 
     CONSTANTS:
       c_clsname_me       TYPE seoclsname VALUE 'ZCL_SD_CUSTOMER',
-      c_meth_cache_wgbez TYPE seocpdname VALUE 'CACHE_NAME1',
-      c_tabname_def      TYPE tabname    VALUE 'KNA1'.
+      c_meth_cache_wgbez TYPE seocpdname VALUE 'CACHE_NAME1'.
 
     CLASS-DATA:
+      gs_clazy    TYPE t_clazy,
+      gt_hq       TYPE tt_hq,
       gt_kna1     TYPE HASHED TABLE OF kna1 WITH UNIQUE KEY primary_key COMPONENTS kunnr,
-      gt_knvv     type tt_knvv,
+      gt_knvv     TYPE tt_knvv,
       gt_multiton TYPE tt_multiton,
       gt_name1    TYPE tt_name1.
 
+    CLASS-METHODS:
+      read_parob_lazy.
 ENDCLASS.
 
 
@@ -133,6 +199,135 @@ CLASS ZCL_SD_CUSTOMER IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD ensure_obl_part_funcs_filled.
+
+    CHECK (
+        it_vkorg IS NOT INITIAL AND
+        it_parob IS NOT INITIAL
+    ).
+
+    read_parob_lazy( ).
+    CHECK gs_clazy-val-parob IS NOT INITIAL.
+
+    DATA(lt_vkorg_rng) = VALUE zcl_sd_sales_org=>tt_vkorg_rng(
+        FOR GROUPS gr1 OF ls_vkorg IN it_vkorg
+        GROUP BY ls_vkorg-vkorg
+        (
+            option = zcl_bc_ddic_toolkit=>c_option_eq
+            sign   = zcl_bc_ddic_toolkit=>c_sign_i
+            low    = gr1
+        )
+    ).
+
+    DATA(lt_parob_bin) = it_parob.
+    SORT lt_parob_bin BY vkorg parvw. " Binary Search
+
+    LOOP AT gs_clazy-val-parob
+        ASSIGNING FIELD-SYMBOL(<ls_parob>)
+        WHERE vkorg IN lt_vkorg_rng.
+
+      READ TABLE lt_parob_bin
+          TRANSPORTING NO FIELDS
+          WITH KEY
+              vkorg = <ls_parob>-vkorg
+              parvw = <ls_parob>-parvw
+          BINARY SEARCH.
+
+      CHECK sy-subrc NE 0.
+
+      RAISE EXCEPTION TYPE zcx_sd_parob
+        EXPORTING
+          textid = zcx_sd_parob=>par_func_obl_in_sales_org
+          vkorg  = <ls_parob>-vkorg
+          parvw  = <ls_parob>-parvw.
+
+    ENDLOOP.
+
+  ENDMETHOD.
+
+
+  METHOD get_head_customer.
+
+    IF gt_hq IS INITIAL.
+      SELECT *
+        FROM zfit_mrk_sube
+        WHERE kunnr EQ @gs_def-kunnr
+        INTO CORRESPONDING FIELDS OF TABLE @gt_hq
+        ##TOO_MANY_ITAB_FIELDS.
+
+      IF gt_hq IS INITIAL.
+        INSERT INITIAL LINE INTO TABLE gt_hq.
+      ENDIF.
+    ENDIF.
+
+    ASSIGN gt_hq[
+        KEY primary_key COMPONENTS
+        bukrs = iv_bukrs
+      ] TO FIELD-SYMBOL(<ls_hq>).
+
+    IF sy-subrc NE 0.
+      RAISE EXCEPTION TYPE zcx_sd_customer_hq_def
+        EXPORTING
+          kunnr = gs_def-kunnr
+          bukrs = iv_bukrs.
+    ENDIF.
+
+    IF <ls_hq>-cx IS NOT INITIAL.
+      RAISE EXCEPTION <ls_hq>-cx.
+    ENDIF.
+
+    IF <ls_hq>-obj IS INITIAL.
+
+      TRY.
+          <ls_hq>-obj = get_instance( <ls_hq>-knrze ).
+        CATCH zcx_sd_customer_def INTO DATA(lo_cd).
+
+          <ls_hq>-cx = NEW zcx_sd_customer_hq_def(
+              textid   = zcx_sd_customer_hq_def=>hq_value_invalid
+              previous = lo_cd
+              kunnr    = gs_def-kunnr
+              bukrs    = <ls_hq>-bukrs
+              knrze    = <ls_hq>-knrze
+          ).
+
+          RAISE EXCEPTION <ls_hq>-cx.
+
+      ENDTRY.
+
+    ENDIF.
+
+    ro_head = <ls_hq>-obj.
+
+  ENDMETHOD.
+
+
+  METHOD get_hq_branch_codes.
+
+    SELECT *
+      FROM zfit_mrk_sube
+      WHERE bukrs IN @it_bukrs
+      INTO TABLE @DATA(lt_db).
+
+    DELETE lt_db WHERE NOT ( knrze IN it_knrze ). " Aralık geniş olabileceği için sorguya koymadım
+
+    LOOP AT lt_db ASSIGNING FIELD-SYMBOL(<ls_db>).
+
+      IF iv_need_br EQ abap_true.
+        APPEND <ls_db>-kunnr TO rt_kunnr.
+      ENDIF.
+
+      IF iv_need_hq EQ abap_true.
+        APPEND <ls_db>-knrze TO rt_kunnr.
+      ENDIF.
+
+    ENDLOOP.
+
+    SORT rt_kunnr.
+    DELETE ADJACENT DUPLICATES FROM rt_kunnr.
+
+  ENDMETHOD.
+
+
   METHOD get_instance.
 
     ASSIGN gt_multiton[ KEY primary_key COMPONENTS kunnr = iv_kunnr ] TO FIELD-SYMBOL(<ls_multiton>).
@@ -145,11 +340,11 @@ CLASS ZCL_SD_CUSTOMER IMPLEMENTATION.
       SELECT SINGLE * INTO ls_multiton-obj->gs_def FROM kna1 WHERE kunnr EQ ls_multiton-kunnr.
 
       IF sy-subrc NE 0.
-        RAISE EXCEPTION TYPE zcx_bc_table_content
+
+        RAISE EXCEPTION TYPE zcx_sd_customer_def
           EXPORTING
-            textid   = zcx_bc_table_content=>entry_missing
-            objectid = CONV #( ls_multiton-kunnr )
-            tabname  = c_tabname_def.
+            kunnr = ls_multiton-kunnr.
+
       ENDIF.
 
       INSERT ls_multiton INTO TABLE gt_multiton ASSIGNING <ls_multiton>.
@@ -190,7 +385,7 @@ CLASS ZCL_SD_CUSTOMER IMPLEMENTATION.
         spart = iv_spart
     ] TO FIELD-SYMBOL(<ls_knvv>).
 
-    IF sy-subrc ne 0.
+    IF sy-subrc NE 0.
       CLEAR ls_knvv.
       SELECT SINGLE * FROM knvv INTO ls_knvv
         WHERE kunnr = iv_kunnr
@@ -228,6 +423,35 @@ CLASS ZCL_SD_CUSTOMER IMPLEMENTATION.
     ENDIF.
 
     rv_name1 = <ls_name1>-name1.
+
+  ENDMETHOD.
+
+  method get_Transport_zone.
+
+    ro_obj = zcl_sd_transport_zone=>get_instance(
+      iv_land1 = gs_def-land1
+      iv_zone1 = gs_def-lzone
+    ).
+
+  endmethod.
+
+  METHOD read_parob_lazy.
+    CHECK gs_clazy-flg-parob IS INITIAL.
+    SELECT * INTO CORRESPONDING FIELDS OF TABLE gs_clazy-val-parob FROM zsdt_cus_parob.
+    gs_clazy-flg-parob = abap_true.
+  ENDMETHOD.
+
+
+  METHOD set_head_customer_if_found.
+
+    CHECK cv_kunnr IS NOT INITIAL.
+
+    TRY.
+        DATA(lv_knrze) = get_instance( cv_kunnr )->get_head_customer( iv_bukrs )->gs_def-kunnr.
+        cv_kunnr = lv_knrze.
+      CATCH cx_root.
+        RETURN.
+    ENDTRY.
 
   ENDMETHOD.
 ENDCLASS.

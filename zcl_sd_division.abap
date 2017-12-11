@@ -24,7 +24,8 @@ ENDCLASS.
 
 
 
-CLASS zcl_sd_division IMPLEMENTATION.
+CLASS ZCL_SD_DIVISION IMPLEMENTATION.
+
 
   METHOD get_division_txt.
 
@@ -42,5 +43,4 @@ CLASS zcl_sd_division IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
-
 ENDCLASS.

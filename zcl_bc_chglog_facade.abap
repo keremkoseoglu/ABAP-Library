@@ -35,7 +35,9 @@ CLASS zcl_bc_chglog_facade DEFINITION
 ENDCLASS.
 
 
-CLASS zcl_bc_chglog_facade IMPLEMENTATION.
+
+CLASS ZCL_BC_CHGLOG_FACADE IMPLEMENTATION.
+
 
   METHOD get_odt_since.
 
@@ -84,5 +86,4 @@ CLASS zcl_bc_chglog_facade IMPLEMENTATION.
     ENDIF.
 
   ENDMETHOD.
-
 ENDCLASS.

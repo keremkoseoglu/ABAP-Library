@@ -45,8 +45,8 @@ CLASS zcl_bc_applog_facade DEFINITION
         !it_bdcmsgcoll TYPE tab_bdcmsgcoll .
     METHODS add_exception
       IMPORTING
-        !io_cx    TYPE REF TO cx_root
-        !iv_msgty TYPE symsgty DEFAULT c_msgty_e .
+        !io_cx     TYPE REF TO cx_root
+        !iv_msgty  TYPE symsgty DEFAULT c_msgty_e.
     METHODS add_free_text
       IMPORTING
         !iv_text  TYPE c
@@ -60,6 +60,8 @@ CLASS zcl_bc_applog_facade DEFINITION
         !iv_msgty TYPE symsgty DEFAULT c_msgty_s
       RAISING
         zcx_bc_class_method.
+
+    methods add_String importing !iv_msg type string.
 
     METHODS add_swr
       IMPORTING
@@ -81,7 +83,7 @@ CLASS zcl_bc_applog_facade DEFINITION
         !iv_msgv2    TYPE data OPTIONAL
         !iv_msgv3    TYPE data OPTIONAL
         !iv_msgv4    TYPE data OPTIONAL
-        !iv_cumulate TYPE abap_bool DEFAULT abap_false .
+        !iv_cumulate TYPE abap_bool DEFAULT abap_false.
     METHODS clear_log .
     METHODS constructor
       IMPORTING
@@ -145,7 +147,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_applog_facade IMPLEMENTATION.
+CLASS ZCL_BC_APPLOG_FACADE IMPLEMENTATION.
 
 
   METHOD add_bapiret1.
@@ -282,6 +284,7 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
 
   ENDMETHOD. "add_free_text
 
+
   METHOD add_itab_fld_as_free_text.
 
     FIELD-SYMBOLS:
@@ -328,6 +331,58 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
+
+  method add_string.
+
+    DATA:
+        lt_br2  type bapiret2_t,
+        lt_ret  TYPE TABLE OF char50,
+        lv_cmsg(9999).
+
+    lv_cmsg = iv_msg.
+
+    CALL FUNCTION 'IQAPI_WORD_WRAP'
+      EXPORTING
+        textline            = lv_cmsg
+*       DELIMITER           = ' '
+        outputlen           = 50
+*   IMPORTING
+*       OUT_LINE1           =
+*       OUT_LINE2           =
+*       OUT_LINE3           =
+      TABLES
+        out_lines           = lt_ret
+      EXCEPTIONS
+        outputlen_too_large = 1
+        OTHERS              = 2.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+
+    APPEND INITIAL LINE TO lt_br2 ASSIGNING FIELD-SYMBOL(<ls_return>).
+    LOOP AT lt_ret ASSIGNING FIELD-SYMBOL(<ls_ret>).
+
+      <ls_return>-id = 'L1'.
+      <ls_return>-number = '000'.
+      <ls_return>-type = 'E'.
+      IF  <ls_return>-message_v1 IS INITIAL.
+        <ls_return>-message_v1 = <ls_ret>.
+      ELSEIF  <ls_return>-message_v2 IS INITIAL.
+        <ls_return>-message_v2 = <ls_ret>.
+      ELSEIF  <ls_return>-message_v3 IS INITIAL.
+        <ls_return>-message_v3 = <ls_ret>.
+      ELSEIF  <ls_return>-message_v4 IS INITIAL.
+        <ls_return>-message_v4 = <ls_ret>.
+        APPEND INITIAL LINE TO lt_br2 ASSIGNING <ls_return>.
+      ENDIF.
+    ENDLOOP.
+
+    DELETE lt_br2 WHERE message_v1 IS INITIAL.
+
+    add_bapiret2( lt_br2 ).
+
+  endmethod.
+
 
   METHOD add_swr.
 

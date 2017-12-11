@@ -30,22 +30,16 @@ CLASS zcl_bc_tcode_list DEFINITION
   PROTECTED SECTION.
   PRIVATE SECTION.
 
-    TYPES: BEGIN OF t_obj_name,
-             obj_name TYPE e071-obj_name,
-           END OF t_obj_name,
-
-           BEGIN OF t_trans,
+    TYPES: BEGIN OF t_trans,
              trkorr   TYPE e070-trkorr,
              strkorr  TYPE e070-strkorr,
              as4text  TYPE e07t-as4text,
              obj_name TYPE e071-obj_name,
            END OF t_trans,
 
-           tt_trans    TYPE STANDARD TABLE OF t_trans WITH DEFAULT KEY,
+           tt_trans    TYPE STANDARD TABLE OF t_trans WITH DEFAULT KEY.
 
-           tt_obj_name TYPE STANDARD TABLE OF t_obj_name WITH DEFAULT KEY.
-
-    CONSTANTS: c_har(3)      VALUE 'HAR',
+    CONSTANTS: c_har(3)      VALUE 'VOL',
                c_object_tran TYPE trobjtype VALUE 'TRAN',
                c_pgmid_r3tr  TYPE pgmid     VALUE 'R3TR'.
 
@@ -61,14 +55,17 @@ CLASS zcl_bc_tcode_list DEFINITION
         !is_trans TYPE t_trans
       CHANGING
         !cs_ret   TYPE zbcs_tcode_list.
-
 ENDCLASS.
 
-CLASS zcl_bc_tcode_list IMPLEMENTATION.
+
+
+CLASS ZCL_BC_TCODE_LIST IMPLEMENTATION.
+
 
   METHOD constructor.
     gs_param = is_param.
   ENDMETHOD.
+
 
   METHOD get_data.
 
@@ -78,28 +75,36 @@ CLASS zcl_bc_tcode_list IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD read_basic.
 
     CLEAR gt_ret[].
 
-    SELECT tstc~tcode
-           tadir~author tadir~created_on tadir~check_date tadir~srcsystem tadir~devclass
-           tdevc~tpclass
-           tstct~ttext
-           INTO CORRESPONDING FIELDS OF TABLE gt_ret
-           FROM tstc
-                INNER JOIN tadir ON tadir~pgmid    EQ c_pgmid_r3tr
-                                AND tadir~object   EQ c_object_tran
-                                AND tadir~obj_name EQ tstc~tcode
-                INNER JOIN tdevc ON tdevc~devclass EQ tadir~devclass
-                LEFT  JOIN tstct ON tstct~sprsl    EQ sy-langu
-                                AND tstct~tcode    EQ tstc~tcode
-           WHERE tstc~tcode IN gs_param-tcode_rng
-             AND tadir~devclass IN gs_param-devclass_rng
-             AND tdevc~tpclass IN gs_param-tpclass_rng
-           ORDER BY tstc~tcode.
+    SELECT
+        tstc~tcode
+        tadir~author tadir~created_on tadir~check_date tadir~srcsystem tadir~devclass
+        tdevc~tpclass
+        tstct~ttext
+      INTO CORRESPONDING FIELDS OF TABLE gt_ret
+      FROM
+        tstc
+        INNER JOIN tadir ON
+          tadir~pgmid EQ c_pgmid_r3tr AND
+          tadir~object EQ c_object_tran AND
+          tadir~obj_name EQ tstc~tcode
+        INNER JOIN tdevc ON tdevc~devclass EQ tadir~devclass
+        LEFT  JOIN tstct ON
+          tstct~sprsl EQ sy-langu AND
+          tstct~tcode    EQ tstc~tcode
+       WHERE
+         tstc~tcode IN gs_param-tcode_rng AND
+         tadir~devclass IN gs_param-devclass_rng AND
+         tdevc~tpclass IN gs_param-tpclass_rng
+       ORDER BY tstc~tcode
+       ##TOO_MANY_ITAB_FIELDS.
 
   ENDMETHOD.
+
 
   METHOD read_requests.
 
@@ -158,6 +163,7 @@ CLASS zcl_bc_tcode_list IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD set_req_data.
 
     DATA lt_split TYPE STANDARD TABLE OF string.
@@ -179,5 +185,4 @@ CLASS zcl_bc_tcode_list IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
-
 ENDCLASS.

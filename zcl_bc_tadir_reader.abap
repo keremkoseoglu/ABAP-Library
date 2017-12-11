@@ -59,7 +59,9 @@ CLASS zcl_bc_tadir_reader DEFINITION
 ENDCLASS.
 
 
-CLASS zcl_bc_tadir_reader IMPLEMENTATION.
+
+CLASS ZCL_BC_TADIR_READER IMPLEMENTATION.
+
 
   method does_object_exist.
 
@@ -70,6 +72,7 @@ CLASS zcl_bc_tadir_reader IMPLEMENTATION.
     ] ) ).
 
   endmethod.
+
 
   method does_object_exist_facade.
 
@@ -89,6 +92,7 @@ CLASS zcl_bc_tadir_reader IMPLEMENTATION.
     rv_exist = <ls_cache>-exists.
 
   endmethod.
+
 
   method read_tadir.
 
@@ -181,5 +185,4 @@ CLASS zcl_bc_tadir_reader IMPLEMENTATION.
     endif.
 
   endmethod.
-
 ENDCLASS.

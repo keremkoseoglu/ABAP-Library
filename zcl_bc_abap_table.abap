@@ -148,7 +148,8 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_abap_table IMPLEMENTATION.
+CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
+
 
   method check_Table_has_field.
     read_fields_lazy( ).
@@ -162,6 +163,7 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
 
   endmethod.
 
+
   method check_Table_Has_flds_of_tab.
 
     loop at get_instance( iv_tabname )->get_fields( ) assigning field-symbol(<ls_fld>).
@@ -169,6 +171,7 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
     endloop.
 
   endmethod.
+
 
   method enqueue.
 
@@ -196,9 +199,11 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
 
   endmethod.
 
+
   METHOD get_dbfield_text.
     rv_ddtext = zcl_bc_dbfield_text_abs=>get_text_via_chain( iv_dbfield ).
   ENDMETHOD.
+
 
   method get_field.
     read_fields_lazy( ).
@@ -218,10 +223,12 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
 
   endmethod.
 
+
   method get_Fields.
     read_fields_lazy( ).
     rt_dd03l = gs_lazy-val-field.
   endmethod.
+
 
   method get_included_Tables.
 
@@ -265,6 +272,7 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
 
   endmethod.
 
+
   METHOD get_instance.
 
     ASSIGN gt_mt[ KEY primary_key COMPONENTS tabname = iv_tabname ] TO FIELD-SYMBOL(<ls_mt>).
@@ -295,6 +303,7 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD get_key_fields.
     read_keys_lazy( ).
     rt_dd03l = gs_lazy-val-key.
@@ -305,9 +314,11 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   method get_rollname_of_field.
     rv_roll = get_Field( iv_fnam )-rollname.
   endmethod.
+
 
   METHOD get_rollname_pairs.
 
@@ -388,6 +399,7 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   method get_Tables_containing_dtel.
 
     assign gt_dtel_Tab[
@@ -418,6 +430,7 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
 
   endmethod.
 
+
   METHOD read_fields_lazy.
 
     CHECK gs_lazy-flag-field IS INITIAL.
@@ -430,6 +443,7 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
     gs_lazy-flag-field = abap_true.
 
   ENDMETHOD.
+
 
   method read_includes_lazy.
 
@@ -444,6 +458,7 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
     gs_lazy-flag-include = abap_true.
 
   endmethod.
+
 
   METHOD read_keys_lazy.
 
@@ -460,5 +475,4 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
     gs_lazy-flag-key = abap_true.
 
   ENDMETHOD.
-
 ENDCLASS.

@@ -5,14 +5,23 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
 
   PUBLIC SECTION.
 
+
+
     CLASS-METHODS:
 
-    check_selection_date_limit
-      IMPORTING
-        VALUE(iv_tcode)  TYPE sy-tcode
-        VALUE(it_values) TYPE zbctt_date_limit_values
-      RAISING
-        zcx_bc_genel ,
+      check_selection_date_limit
+        IMPORTING
+          VALUE(iv_tcode)  TYPE sy-tcode
+          VALUE(it_values) TYPE zbctt_date_limit_values
+        RAISING
+          zcx_bc_genel ,
+
+      is_weekday_checked
+        importing
+          !iv_datum type datum
+          !is_wdays type ZSDS_DAY_CHECKBOX
+        returning
+          value(rv_checked) type abap_bool,
 
       get_date_range_of_date_period
         IMPORTING
@@ -23,6 +32,10 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
         RAISING
           zcx_bc_function_subrc,
 
+      get_day_in_week
+        IMPORTING !iv_date      TYPE sydatum
+        RETURNING VALUE(rv_day) TYPE i,
+
       get_last_day_of_period
         IMPORTING
           !iv_perio       TYPE char1
@@ -32,24 +45,64 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
         RAISING
           zcx_bc_symsg,
 
+      get_mutual_checked_days
+        importing !it_day type ZSDTT_DAY_CHECKBOX
+        returning value(rs_day) type ZSDs_DAY_CHECKBOX,
+
+      is_factory_workday
+        IMPORTING
+          !iv_datum         TYPE sydatum
+          !iv_calid         TYPE scal-fcalid
+        RETURNING
+          VALUE(rv_workday) TYPE abap_bool
+        RAISING
+          zcx_bc_function_subrc,
+
       last_day
         IMPORTING !iv_day       TYPE datum
-        RETURNING VALUE(rv_day) TYPE datum .
+        RETURNING VALUE(rv_day) TYPE datum ,
+
+      previous_month_last_day
+        EXPORTING
+          !ev_last_month TYPE postper_kk
+          !ev_last_day   TYPE datum .
 
   PROTECTED SECTION.
   PRIVATE SECTION.
 
     TYPES:
+      BEGIN OF t_diw_cache,
+        datum TYPE sydatum,
+        day   TYPE i,
+      END OF t_diw_cache,
+
+      tt_diw_cache
+        TYPE HASHED TABLE OF t_diw_cache
+        WITH UNIQUE KEY primary_key COMPONENTS datum,
+
       BEGIN OF t_drodp_multiton,
         periv TYPE periv,
         date  TYPE sydatum,
         range TYPE date_t_range,
       END OF t_drodp_multiton,
 
-      tt_drodp_multiton TYPE HASHED TABLE OF t_drodp_multiton WITH UNIQUE KEY primary_key COMPONENTS periv date.
+      tt_drodp_multiton TYPE HASHED TABLE OF t_drodp_multiton WITH UNIQUE KEY primary_key COMPONENTS periv date,
+
+      begin of t_fwd_cache,
+        datum   type sydatum,
+        calid   type scal-fcalid,
+        cx      type ref to zcx_bc_function_subrc,
+        workday type abap_bool,
+      end of t_fwd_Cache,
+
+      tt_fwd_cache
+        type hashed table of t_fwd_Cache
+        with unique key primary_key components datum calid.
 
     CLASS-DATA:
-       gt_drodp_multiton TYPE tt_drodp_multiton.
+      gt_diw_cache      TYPE tt_diw_cache,
+      gt_fwd_cache      type tt_Fwd_cache,
+      gt_drodp_multiton TYPE tt_drodp_multiton.
 
     CLASS-METHODS selection_screen_text
       IMPORTING
@@ -62,7 +115,8 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
+CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
+
 
   METHOD check_selection_date_limit.
     "--------->> written by mehmet sertkaya 20.01.2017 14:52:44
@@ -113,6 +167,7 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
   ENDMETHOD.
+
 
   METHOD get_date_range_of_date_period.
 
@@ -174,6 +229,38 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
     rt_range = <ls_mt>-range.
 
   ENDMETHOD.
+
+
+  METHOD get_day_in_week.
+
+    data lv_wotnr type p.
+
+    ASSIGN gt_diw_cache[
+        datum = iv_date
+      ] TO FIELD-SYMBOL(<ls_diw>).
+
+    IF sy-subrc NE 0.
+
+      DATA(ls_cache) = VALUE t_diw_cache( datum = iv_date ).
+
+      CALL FUNCTION 'DAY_IN_WEEK'
+        EXPORTING
+          datum = ls_cache-datum
+        IMPORTING
+          wotnr = lv_wotnr.
+
+      ls_cache-day = lv_wotnr.
+
+      INSERT ls_cache
+        INTO TABLE gt_diw_cache
+        ASSIGNING <ls_diw>.
+
+    ENDIF.
+
+    rv_day = <ls_diw>-day.
+
+  ENDMETHOD.
+
 
   METHOD get_last_day_of_period.
     DATA: lv_week  TYPE scal-week,
@@ -245,6 +332,132 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+
+  method get_mutual_checked_days.
+
+    check it_day is not initial.
+
+    rs_day = value #(
+      monda = abap_True
+      tuesd = abap_true
+      wedne = abap_true
+      thurs = abap_True
+      frida = abap_true
+      satur = abap_true
+      sunda = abap_true
+    ).
+
+    loop at it_day assigning field-symbol(<ls_day>).
+
+      if <ls_day>-monda eq abap_False.
+        rs_day-monda = abap_False.
+      endif.
+
+      if <ls_day>-tuesd eq abap_False.
+        rs_day-tuesd = abap_False.
+      endif.
+
+      if <ls_day>-wedne eq abap_False.
+        rs_day-wedne = abap_False.
+      endif.
+
+      if <ls_day>-thurs eq abap_False.
+        rs_day-thurs = abap_False.
+      endif.
+
+      if <ls_day>-frida eq abap_False.
+        rs_day-frida = abap_False.
+      endif.
+
+      if <ls_day>-satur eq abap_False.
+        rs_day-satur = abap_False.
+      endif.
+
+      if <ls_day>-sunda eq abap_False.
+        rs_day-sunda = abap_False.
+      endif.
+
+    endloop.
+
+  endmethod.
+
+
+  method is_factory_workday.
+
+    assign gt_fwd_cache[
+        key primary_key components
+        datum = iv_datum
+        calid = iv_calid
+      ] to field-symbol(<ls_fwd>).
+
+    if sy-subrc ne 0.
+
+      data(ls_fwd) = value t_fwd_cache(
+        datum = iv_datum
+        calid = iv_calid
+      ).
+
+      try.
+
+          call function 'DATE_CHECK_WORKINGDAY'
+            EXPORTING
+              date                       = ls_fwd-datum
+              factory_calendar_id        = ls_fwd-calid
+              message_type               = zcl_bc_applog_facade=>c_msgty_s
+            EXCEPTIONS
+              date_after_range           = 1
+              date_before_range          = 2
+              date_invalid               = 3
+              date_no_workingday         = 4
+              factory_calendar_not_found = 5
+              message_type_invalid       = 6
+              others                     = 7.
+
+          case sy-subrc.
+            when 0.
+              ls_fwd-workday = abap_true.
+            when 4.
+              ls_fwd-workday = abap_False.
+            when others.
+              zcx_Bc_function_subrc=>raise_if_sysubrc_not_initial( 'DATE_CHECK_WORKINGDAY' ).
+          endcase.
+
+        catch zcx_bc_function_subrc into datA(lo_fun).
+          ls_fwd-cx = lo_fun.
+      endtry.
+
+      insert ls_Fwd
+        into table gt_fwd_cache
+        assigning <ls_Fwd>.
+
+    endif.
+
+    if <ls_fwd>-cx is not initial.
+      raise exception <ls_fwd>-cx.
+    endif.
+
+    rv_workday = <ls_fwd>-workday.
+
+  endmethod.
+
+
+  method is_weekday_checked.
+
+    data(lv_day_in_week) = get_day_in_week( iv_datum ).
+
+    rv_checked = xsdbool(
+      ( lv_day_in_week eq 1 and is_wdays-monda eq abap_true ) OR
+      ( lv_day_in_week eq 2 and is_wdays-tuesd eq abap_true ) OR
+      ( lv_day_in_week eq 3 and is_wdays-wedne eq abap_true ) OR
+      ( lv_day_in_week eq 4 and is_wdays-thurs eq abap_true ) OR
+      ( lv_day_in_week eq 5 and is_wdays-frida eq abap_true ) OR
+      ( lv_day_in_week eq 6 and is_wdays-satur eq abap_true ) OR
+      ( lv_day_in_week eq 7 and is_wdays-sunda eq abap_true )
+    ).
+
+  endmethod.
+
+
   METHOD last_day.
 
     CALL FUNCTION 'BKK_GET_MONTH_LASTDAY'
@@ -253,6 +466,15 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
       IMPORTING
         e_date = rv_day.
   ENDMETHOD.
+
+
+  METHOD previous_month_last_day.
+    ev_last_day = sy-datum.
+    ev_last_day+6(2) = '01'.
+    ev_last_day = ev_last_day - 1.
+    ev_last_month = ev_last_day(6).
+  ENDMETHOD.
+
 
   METHOD selection_screen_text.
 
@@ -347,5 +569,4 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
     ENDIF.
 
   ENDMETHOD.
-
 ENDCLASS.

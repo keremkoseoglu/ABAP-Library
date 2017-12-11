@@ -17,6 +17,13 @@ CLASS zcl_bc_dynamic_itab DEFINITION
 
     DATA gt_fld TYPE tt_fld READ-ONLY.
 
+    CLASS-METHODS create_range
+      IMPORTING
+        !im_v_field TYPE fieldname
+      EXPORTING
+        !ex_r_wa    TYPE REF TO data
+        !ex_r_tab   TYPE REF TO data .
+
     CLASS-METHODS get_instance_as_range
       IMPORTING
         !iv_rollname  TYPE rollname
@@ -74,7 +81,10 @@ CLASS zcl_bc_dynamic_itab DEFINITION
 
 ENDCLASS.
 
-CLASS zcl_bc_dynamic_itab IMPLEMENTATION.
+
+
+CLASS ZCL_BC_DYNAMIC_ITAB IMPLEMENTATION.
+
 
   METHOD build_comp.
 
@@ -91,19 +101,20 @@ CLASS zcl_bc_dynamic_itab IMPLEMENTATION.
           lo_element ?=  cl_abap_elemdescr=>describe_by_name( <ls_fld>-dtel ).
           APPEND VALUE #( name = <ls_fld>-fnam type = lo_element ) TO gt_comp.
           CONTINUE.
-        CATCH cx_root .
+        CATCH cx_root ##NO_HANDLER.
       ENDTRY.
 
       TRY.
           lo_tab ?= cl_abap_tabledescr=>describe_by_name( <ls_fld>-dtel ).
           APPEND VALUE #( name = <ls_fld>-fnam type = lo_tab ) TO gt_comp.
           CONTINUE.
-        CATCH cx_root.
+        CATCH cx_root ##NO_HANDLER.
       ENDTRY.
 
     ENDLOOP.
 
   ENDMETHOD.
+
 
   METHOD constructor.
 
@@ -120,6 +131,50 @@ CLASS zcl_bc_dynamic_itab IMPLEMENTATION.
     ENDTRY.
 
     gt_fld[] = it_fld[].
+  ENDMETHOD.
+
+  METHOD create_range.
+
+    DATA:
+      lr_structdescr TYPE REF TO cl_abap_structdescr,
+      lr_tabledescr  TYPE REF TO cl_abap_tabledescr,
+      lr_datadescr   TYPE REF TO cl_abap_datadescr,
+      lt_components  TYPE abap_component_tab,
+      ls_component   TYPE LINE OF abap_component_tab.
+*    lr_wa             type ref to data,
+*    lr_tab            type ref to data.
+
+* determine components of structure -> lt_components
+    MOVE 'SIGN' TO ls_component-name.
+    ls_component-type = cl_abap_elemdescr=>get_c( p_length = 1 ).
+    INSERT ls_component INTO TABLE lt_components.
+
+    MOVE 'OPTION' TO ls_component-name.
+    ls_component-type = cl_abap_elemdescr=>get_c( p_length = 2 ).
+    INSERT ls_component INTO TABLE lt_components.
+
+    MOVE 'LOW' TO ls_component-name.
+    ls_component-type ?= cl_abap_elemdescr=>describe_by_name( 'MATNR' ).
+    INSERT ls_component INTO TABLE lt_components.
+
+    MOVE 'HIGH' TO ls_component-name.
+    ls_component-type ?= cl_abap_elemdescr=>describe_by_name( 'MATNR' ).
+    INSERT ls_component INTO TABLE lt_components.
+
+* get structure descriptor -> lr_STRUCTDESCR
+    lr_structdescr = cl_abap_structdescr=>create( lt_components ).
+
+* create work area of structure lr_STRUCTDESCR -> lr_WA
+    CREATE DATA ex_r_wa TYPE HANDLE lr_structdescr.
+*  assign lr_wa->* to <fs_range>.
+
+    lr_datadescr = lr_structdescr.
+    lr_tabledescr = cl_abap_tabledescr=>create( lr_datadescr ).
+
+* Create dynmaic internal table
+    CREATE DATA ex_r_tab TYPE HANDLE lr_tabledescr.
+*  assign lr_tab->* to <fs_range_tab>.
+
   ENDMETHOD.
 
   METHOD get_alv_fcat.
@@ -162,6 +217,7 @@ CLASS zcl_bc_dynamic_itab IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD get_instance_with_tabname.
 
     DATA lt_fld TYPE tt_fld.
@@ -181,6 +237,7 @@ CLASS zcl_bc_dynamic_itab IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD get_itab_ref.
 
     IF gr_tref IS INITIAL.
@@ -199,6 +256,7 @@ CLASS zcl_bc_dynamic_itab IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD get_wa_ref.
 
     IF gr_wref IS INITIAL.
@@ -213,6 +271,7 @@ CLASS zcl_bc_dynamic_itab IMPLEMENTATION.
     rr_ref = gr_wref.
 
   ENDMETHOD.
+
 
   METHOD validate_fld.
 
@@ -232,5 +291,4 @@ CLASS zcl_bc_dynamic_itab IMPLEMENTATION.
     ENDIF.
 
   ENDMETHOD.
-
 ENDCLASS.

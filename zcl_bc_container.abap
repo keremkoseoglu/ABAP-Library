@@ -39,7 +39,8 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_container IMPLEMENTATION.
+CLASS ZCL_BC_CONTAINER IMPLEMENTATION.
+
 
   METHOD get_var.
 
@@ -59,6 +60,7 @@ CLASS zcl_bc_container IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD set_var.
 
     ASSIGN gt_var[ KEY primary_key
@@ -74,6 +76,7 @@ CLASS zcl_bc_container IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD set_vars.
 
     LOOP AT it_var ASSIGNING FIELD-SYMBOL(<ls_var>).
@@ -81,5 +84,4 @@ CLASS zcl_bc_container IMPLEMENTATION.
     ENDLOOP.
 
   ENDMETHOD.
-
 ENDCLASS.

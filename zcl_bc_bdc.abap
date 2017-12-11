@@ -53,32 +53,40 @@ CLASS zcl_bc_bdc DEFINITION
 ENDCLASS.
 
 
-CLASS zcl_bc_bdc IMPLEMENTATION.
+
+CLASS ZCL_BC_BDC IMPLEMENTATION.
+
 
   METHOD add_fld.
     APPEND VALUE #( fnam = iv_nam fval = iv_val ) TO gt_bdcdata.
   ENDMETHOD.
 
+
   METHOD add_scr.
     APPEND VALUE #( program = iv_prg dynpro = iv_dyn dynbegin = abap_true ) TO gt_bdcdata.
   ENDMETHOD.
+
 
   METHOD clear.
     CLEAR gt_bdcdata[].
   ENDMETHOD.
 
+
   METHOD close_group.
+
     CALL FUNCTION 'BDC_CLOSE_GROUP'
       EXCEPTIONS
         not_open    = 1
         queue_error = 2
-        OTHERS      = 3.
+        OTHERS      = 3
+      ##FM_SUBRC_OK.
 
     zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'BDC_CLOSE_GROUP' ).
 
     clear(  ).
 
   ENDMETHOD.
+
 
   METHOD insert_tcode.
 
@@ -94,13 +102,15 @@ CLASS zcl_bc_bdc IMPLEMENTATION.
         tcode_invalid    = 4
         printing_invalid = 5
         posting_invalid  = 6
-        OTHERS           = 7.
+        OTHERS           = 7
+      ##FM_SUBRC_OK.
 
     zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'BDC_INSERT' ).
 
     clear( ).
 
   ENDMETHOD.
+
 
   METHOD open_group.
     CALL FUNCTION 'BDC_OPEN_GROUP'
@@ -119,11 +129,13 @@ CLASS zcl_bc_bdc IMPLEMENTATION.
         running             = 8
         system_lock_error   = 9
         user_invalid        = 10
-        OTHERS              = 11.
+        OTHERS              = 11
+      ##FM_SUBRC_OK.
 
     zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'BDC_OPEN_GROUP' ).
 
   ENDMETHOD.
+
 
   METHOD submit.
 
@@ -133,5 +145,4 @@ CLASS zcl_bc_bdc IMPLEMENTATION.
          OPTIONS FROM is_option.
 
   ENDMETHOD.
-
 ENDCLASS.

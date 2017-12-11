@@ -55,22 +55,26 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_text_search_rng_builder IMPLEMENTATION.
+CLASS ZCL_BC_TEXT_SEARCH_RNG_BUILDER IMPLEMENTATION.
+
 
   METHOD constructor.
     zcl_bc_data_element=>get_instance( iv_rollname ).
     gv_rollname = iv_rollname.
   ENDMETHOD.
 
+
   METHOD get_instance_by_rollname.
     ro_obj = NEW #( iv_rollname ).
   ENDMETHOD.
+
 
   METHOD get_instance_by_tab_fld.
     ro_obj = get_instance_by_rollname(
       zcl_bc_abap_Table=>get_instance( iv_Tabname )->get_rollname_of_field( iv_fldname )
     ).
   ENDMETHOD.
+
 
   METHOD get_range.
 
@@ -129,5 +133,4 @@ CLASS zcl_bc_text_search_rng_builder IMPLEMENTATION.
     <lv_low_new> = |{ <lv_low> }{ c_char_star }|.
 
   ENDMETHOD.
-
 ENDCLASS.

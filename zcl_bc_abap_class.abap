@@ -155,7 +155,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_abap_class IMPLEMENTATION.
+CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
 
 
   METHOD accept.
@@ -181,10 +181,12 @@ CLASS zcl_bc_abap_class IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   method convert_prgname_to_clsname.
     rv_clsname = iv_prgname+0(30).
     replace all occurrences of '=' in rv_clsname with space.
   endmethod.
+
 
   METHOD dequeue_exec.
 
@@ -193,6 +195,7 @@ CLASS zcl_bc_abap_class IMPLEMENTATION.
         clsname = gs_def-clsname.
 
   ENDMETHOD.
+
 
   METHOD enqueue_exec.
 
@@ -220,6 +223,7 @@ CLASS zcl_bc_abap_class IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
+
 
   METHOD get_components.
 

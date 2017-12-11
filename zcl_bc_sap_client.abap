@@ -16,6 +16,7 @@ CLASS zcl_bc_sap_client DEFINITION
         RAISING   zcx_bc_table_content.
 
     METHODS:
+      ensure_customizing_client RAISING zcx_bc_sap_client,
       is_customizing_client RETURNING VALUE(rv_cust) TYPE abap_bool.
 
   PROTECTED SECTION.
@@ -38,7 +39,19 @@ CLASS zcl_bc_sap_client DEFINITION
 ENDCLASS.
 
 
+
 CLASS zcl_bc_sap_client IMPLEMENTATION.
+
+  METHOD ensure_customizing_client.
+
+    CHECK is_customizing_client( ) EQ abap_false.
+
+    RAISE EXCEPTION TYPE zcx_bc_sap_client
+      EXPORTING
+        textid = zcx_bc_sap_client=>not_customizing_client
+        mandt  = gs_def-mandt.
+
+  ENDMETHOD.
 
   METHOD get_instance.
 
@@ -73,8 +86,8 @@ CLASS zcl_bc_sap_client IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD is_customizing_client.
     rv_cust = xsdbool( gs_def-cccategory EQ c_category_customizing ).
   ENDMETHOD.
-
 ENDCLASS.

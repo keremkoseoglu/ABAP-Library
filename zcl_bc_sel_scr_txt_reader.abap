@@ -50,7 +50,8 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_sel_scr_txt_reader IMPLEMENTATION.
+CLASS ZCL_BC_SEL_SCR_TXT_READER IMPLEMENTATION.
+
 
   METHOD get_instance.
 
@@ -61,6 +62,7 @@ CLASS zcl_bc_sel_scr_txt_reader IMPLEMENTATION.
     ro_obj = go_singleton.
 
   ENDMETHOD.
+
 
   METHOD get_sel_scr.
 
@@ -141,5 +143,4 @@ CLASS zcl_bc_sel_scr_txt_reader IMPLEMENTATION.
     rt_ss = <ls_field_cache>-sel_scr.
 
   ENDMETHOD.
-
 ENDCLASS.

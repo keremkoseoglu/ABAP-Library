@@ -70,7 +70,8 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_abap_package IMPLEMENTATION.
+CLASS ZCL_BC_ABAP_PACKAGE IMPLEMENTATION.
+
 
   METHOD get_nonsap_package_rng.
 
@@ -92,6 +93,7 @@ CLASS zcl_bc_abap_package IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD get_package_of_obj.
 
     DATA(lt_ret) = get_package_of_objects( VALUE #( ( is_key ) ) ).
@@ -106,6 +108,7 @@ CLASS zcl_bc_abap_package IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
+
 
   METHOD get_package_of_objects.
 
@@ -169,6 +172,7 @@ CLASS zcl_bc_abap_package IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD is_obj_custom_development.
 
     ASSIGN gt_custom_dev_cache[
@@ -188,5 +192,4 @@ CLASS zcl_bc_abap_package IMPLEMENTATION.
     rv_nonsap = <ls_cache>-custom.
 
   ENDMETHOD.
-
 ENDCLASS.

@@ -171,6 +171,7 @@ CLASS ZCL_BC_SAP_USER IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   method get_email.
 
     data: lt_Return type standard table of BAPIRET2,
@@ -203,6 +204,7 @@ CLASS ZCL_BC_SAP_USER IMPLEMENTATION.
     rv_email = gs_lazy_var-email.
 
   endmethod.
+
 
   METHOD get_full_name.
 

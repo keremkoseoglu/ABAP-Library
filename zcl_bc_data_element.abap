@@ -16,31 +16,52 @@ CLASS zcl_bc_data_element DEFINITION
         RETURNING VALUE(ro_dtel) TYPE REF TO zcl_bc_data_element
         RAISING   zcx_bc_table_content,
 
+      get_shortest_text_safe
+        IMPORTING !iv_rollname   TYPE rollname
+        RETURNING VALUE(rv_text) TYPE ddtext,
+
       get_text_safe
-        importing !iv_rollname type rollname
-        returning value(rv_text) type ddtext.
+        IMPORTING !iv_rollname   TYPE rollname
+        RETURNING VALUE(rv_text) TYPE ddtext.
 
     METHODS:
 
-      get_Domain
-        returning value(ro_domain) type ref to zcl_Bc_Abap_domain
-        raising   zcx_Bc_table_Content,
+      get_domain
+        RETURNING VALUE(ro_domain) TYPE REF TO zcl_bc_abap_domain
+        RAISING   zcx_bc_table_content,
+
+      get_shortest_text
+        IMPORTING !iv_worst_case_rollname TYPE abap_bool DEFAULT abap_true
+        RETURNING VALUE(rv_text)          TYPE ddtext,
 
       get_text
         IMPORTING !iv_worst_case_rollname TYPE abap_bool DEFAULT abap_true
         RETURNING VALUE(rv_text)          TYPE ddtext,
 
       validate_value
-        importing
-          !iv_value type val_single
-        raising
+        IMPORTING
+          !iv_value TYPE val_single
+        RAISING
           zcx_bc_domain
-          zcx_bc_table_Content.
+          zcx_bc_table_content.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
 
     TYPES:
+      BEGIN OF t_lazy_flg,
+        shortest_text TYPE abap_bool,
+      END OF t_lazy_flg,
+
+      BEGIN OF t_lazy_val,
+        shortest_text TYPE string,
+      END OF t_lazy_val,
+
+      BEGIN OF t_lazy,
+        flg TYPE t_lazy_flg,
+        val TYPE t_lazy_val,
+      END OF t_lazy,
+
       BEGIN OF t_multiton,
         rollname TYPE rollname,
         obj      TYPE REF TO zcl_bc_data_element,
@@ -54,15 +75,19 @@ CLASS zcl_bc_data_element DEFINITION
 
     CLASS-DATA gt_multiton TYPE tt_multiton.
 
+    DATA gs_lazy TYPE t_lazy.
+
 ENDCLASS.
 
 
 
-CLASS ZCL_BC_DATA_ELEMENT IMPLEMENTATION.
+CLASS zcl_bc_data_element IMPLEMENTATION.
 
-  method get_domain.
-    ro_domain = zcl_Bc_abap_Domain=>get_instance( gs_Def-domname ).
-  endmethod.
+
+  METHOD get_domain.
+    ro_domain = zcl_bc_abap_domain=>get_instance( gs_def-domname ).
+  ENDMETHOD.
+
 
   METHOD get_instance.
 
@@ -119,6 +144,35 @@ CLASS ZCL_BC_DATA_ELEMENT IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD get_shortest_text.
+
+    IF gs_lazy-flg-shortest_text EQ abap_false.
+
+      gs_lazy-val-shortest_text = zcl_bc_text_toolkit=>get_shortest_text(
+        VALUE #(
+          ( CONV #( gs_txt-ddtext ) )
+          ( CONV #( gs_txt-reptext ) )
+          ( CONV #( gs_txt-scrtext_l ) )
+          ( CONV #( gs_txt-scrtext_m ) )
+          ( CONV #( gs_txt-scrtext_s ) )
+        )
+      ).
+
+      gs_lazy-flg-shortest_text = abap_true.
+
+    ENDIF.
+
+    rv_text = COND #(
+      WHEN gs_lazy-val-shortest_text IS NOT INITIAL
+      THEN gs_lazy-val-shortest_text
+      ELSE COND #(
+        WHEN iv_worst_case_rollname EQ abap_true
+        THEN gs_def-rollname
+        ELSE space
+      )
+    ).
+
+  ENDMETHOD.
 
   METHOD get_text.
 
@@ -133,18 +187,28 @@ CLASS ZCL_BC_DATA_ELEMENT IMPLEMENTATION.
 
   ENDMETHOD.
 
-  method get_text_safe.
+  METHOD get_shortest_text_safe.
 
-    try.
-        data(lv_ddtext) = zcl_bc_data_element=>get_instance( iv_rollname )->get_text( ).
-      catch cx_root.
-        lv_ddtext = iv_rollname.
-    endtry.
+    TRY.
+        rv_text = zcl_bc_data_element=>get_instance( iv_rollname )->get_shortest_text( ).
+      CATCH cx_root.
+        rv_text = iv_rollname.
+    ENDTRY.
 
-  endmethod.
+  ENDMETHOD.
 
-  method validate_value.
+  METHOD get_text_safe.
+
+    TRY.
+        rv_text = zcl_bc_data_element=>get_instance( iv_rollname )->get_text( ).
+      CATCH cx_root.
+        rv_text = iv_rollname.
+    ENDTRY.
+
+  ENDMETHOD.
+
+
+  METHOD validate_value.
     get_domain( )->validate_value( iv_value ).
-  endmethod.
-
+  ENDMETHOD.
 ENDCLASS.

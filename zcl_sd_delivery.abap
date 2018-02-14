@@ -12,6 +12,7 @@ CLASS zcl_sd_delivery DEFINITION
         customer TYPE REF TO zcl_sd_customer,
         btgew    TYPE likp-btgew,
         gewei    TYPE likp-gewei,
+        vstel    type likp-vstel,
       END OF t_head,
 
       BEGIN OF t_item,
@@ -36,6 +37,24 @@ CLASS zcl_sd_delivery DEFINITION
         RAISING   zcx_sd_delivery_def.
 
     METHODS:
+      attach_gos_doc
+        importing
+          !iv_filename    type clike
+          !iv_description type clike
+          !iv_hex_String  type xstring
+        RAISING
+          zcx_bc_gos_doc_attach,
+
+      del_gos_doc
+        importing
+          !is_docid type SO_ENTRYID
+        raising
+          zcx_bc_gos_doc_delete,
+
+      get_gos_docs
+        returning value(rt_doc) type zcl_Bc_gos_toolkit=>tt_doc_content
+        raising   zcx_bc_gos_doc_content,
+
       get_items
         RETURNING VALUE(rt_item) TYPE tt_item.
 
@@ -66,6 +85,9 @@ CLASS zcl_sd_delivery DEFINITION
         TYPE HASHED TABLE OF t_multiton
         WITH UNIQUE KEY primary_key COMPONENTS vbeln.
 
+    constants:
+      c_gos_classname type bapibds01-classname value 'LIKP'.
+
     CLASS-DATA:
       gt_multiton TYPE tt_multiton.
 
@@ -83,11 +105,25 @@ ENDCLASS.
 
 CLASS zcl_sd_delivery IMPLEMENTATION.
 
+  method attach_gos_doc.
+
+    zcl_bc_gos_toolkit=>attach_doc(
+      iv_filename    = iv_filename
+      iv_description = iv_description
+      iv_hex_string  = iv_hex_string
+      is_key = value #(
+        classname = c_gos_classname
+        objkey    = gs_head-vbeln
+      )
+    ).
+
+  endmethod.
+
   METHOD constructor.
 
     TRY.
 
-        SELECT SINGLE vbeln, kunnr, btgew, gewei
+        SELECT SINGLE vbeln, kunnr, btgew, gewei, vstel
           FROM likp
           WHERE vbeln EQ @iv_vbeln
           INTO CORRESPONDING FIELDS OF @gs_head.
@@ -114,6 +150,38 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
+
+  method del_gos_doc.
+
+      zcl_bc_gos_toolkit=>delete_doc(
+        is_folder_id = VALUE #(
+          objtp = is_docid+0(3)
+          objyr = is_docid+3(2)
+          objno = is_docid+5(12)
+        )
+        is_object_id = VALUE #(
+          objtp = is_docid+17(3)
+          objyr = is_docid+20(2)
+          objno = is_docid+22(12)
+        )
+        is_key = value #(
+          classname = c_gos_classname
+          objkey    = gs_head-vbeln
+        )
+      ).
+
+  endmethod.
+
+  method get_gos_docs.
+
+    rt_doc = zcl_bc_gos_toolkit=>get_doc_content(
+      value #(
+         classname = c_gos_classname
+         objkey    = gs_head-vbeln
+      )
+    ).
+
+  endmethod.
 
   METHOD get_instance.
 

@@ -33,6 +33,16 @@ CLASS zcl_sd_customer DEFINITION
         RAISING
           zcx_sd_parob,
 
+      get_def_land_sd_values
+        IMPORTING !iv_land1     TYPE land1
+        RETURNING VALUE(rs_val) TYPE zfit_xd_def_lsd_fld
+        RAISING   zcx_bc_table_content,
+
+      get_def_tax_codes
+        importing !iv_ktokd type ktokd
+        returning value(rs_val) type ZFIT_XD_DEF_STC_FLD
+        raising   zcx_Bc_Table_content,
+
       get_hq_branch_codes
         IMPORTING
           !iv_need_hq     TYPE abap_bool DEFAULT abap_true
@@ -77,20 +87,47 @@ CLASS zcl_sd_customer DEFINITION
         RETURNING VALUE(ro_head) TYPE REF TO zcl_sd_customer
         RAISING   zcx_sd_customer_hq_def,
 
-      get_Transport_zone
-        returning value(ro_obj) type ref to zcl_Sd_transport_zone
-        raising   zcx_sd_tzone.
+      get_transport_zone
+        RETURNING VALUE(ro_obj) TYPE REF TO zcl_sd_transport_zone
+        RAISING   zcx_sd_tzone.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
 
     TYPES:
+      tt_Def_Stc
+        type hashed table of ZFIT_XD_DEF_STC
+        with unique key primary_key components ktokd,
+
+      tt_land1_rng TYPE RANGE OF land1,
+
+      BEGIN OF t_def_land_sd_val,
+        land1_rng TYPE tt_land1_rng,
+        val       TYPE zfit_xd_def_lsd_fld,
+      END OF t_def_land_sd_val,
+
+      tt_def_land_sd_val
+        TYPE STANDARD TABLE OF t_def_land_sd_val
+        WITH DEFAULT KEY,
+
+      BEGIN OF t_def_lsv_cache,
+        land1 TYPE land1,
+        val   TYPE zfit_xd_def_lsd_fld,
+        cx    TYPE REF TO zcx_bc_table_content,
+      END OF t_def_lsv_cache,
+
+      tt_def_lsv_cache
+        TYPE HASHED TABLE OF t_def_lsv_cache
+        WITH UNIQUE KEY primary_key COMPONENTS land1,
+
       BEGIN OF t_clazy_flg,
-        parob TYPE abap_bool,
+        def_land_sd_val TYPE abap_bool,
+        parob           TYPE abap_bool,
       END OF t_clazy_flg,
 
       BEGIN OF t_clazy_val,
-        parob TYPE tt_parob,
+        def_land_sd_val TYPE tt_def_land_sd_val,
+        parob           TYPE tt_parob,
       END OF t_clazy_val,
 
       BEGIN OF t_clazy,
@@ -129,15 +166,19 @@ CLASS zcl_sd_customer DEFINITION
 
     CONSTANTS:
       c_clsname_me       TYPE seoclsname VALUE 'ZCL_SD_CUSTOMER',
-      c_meth_cache_wgbez TYPE seocpdname VALUE 'CACHE_NAME1'.
+      c_meth_cache_wgbez TYPE seocpdname VALUE 'CACHE_NAME1',
+      c_Tabname_def_stc  type tabname    value 'ZFIT_XD_DEF_STC',
+      c_tabname_lsd      TYPE tabname    VALUE 'ZFIT_XD_DEF_LSD'.
 
     CLASS-DATA:
-      gs_clazy    TYPE t_clazy,
-      gt_hq       TYPE tt_hq,
-      gt_kna1     TYPE HASHED TABLE OF kna1 WITH UNIQUE KEY primary_key COMPONENTS kunnr,
-      gt_knvv     TYPE tt_knvv,
-      gt_multiton TYPE tt_multiton,
-      gt_name1    TYPE tt_name1.
+      gs_clazy     TYPE t_clazy,
+      gt_def_Stc   type tt_Def_Stc,
+      gt_hq        TYPE tt_hq,
+      gt_kna1      TYPE HASHED TABLE OF kna1 WITH UNIQUE KEY primary_key COMPONENTS kunnr,
+      gt_knvv      TYPE tt_knvv,
+      gt_lsv_cache TYPE tt_def_lsv_cache,
+      gt_multiton  TYPE tt_multiton,
+      gt_name1     TYPE tt_name1.
 
     CLASS-METHODS:
       read_parob_lazy.
@@ -145,7 +186,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_SD_CUSTOMER IMPLEMENTATION.
+CLASS zcl_sd_customer IMPLEMENTATION.
 
 
   METHOD cache_name1.
@@ -253,7 +294,7 @@ CLASS ZCL_SD_CUSTOMER IMPLEMENTATION.
         FROM zfit_mrk_sube
         WHERE kunnr EQ @gs_def-kunnr
         INTO CORRESPONDING FIELDS OF TABLE @gt_hq
-        ##TOO_MANY_ITAB_FIELDS.
+        ##TOO_MANY_ITAB_FIELDS. "#EC CI_NOFIRST
 
       IF gt_hq IS INITIAL.
         INSERT INITIAL LINE INTO TABLE gt_hq.
@@ -300,6 +341,94 @@ CLASS ZCL_SD_CUSTOMER IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD get_def_land_sd_values.
+
+    ASSIGN gt_lsv_cache[
+        KEY primary_key COMPONENTS
+        land1 = iv_land1
+      ] TO FIELD-SYMBOL(<ls_cache>).
+
+    IF sy-subrc NE 0.
+
+      DATA(ls_cache) = VALUE t_def_lsv_cache( land1 = iv_land1 ).
+
+      IF gs_clazy-flg-def_land_sd_val EQ abap_false.
+
+        SELECT ddsign, land1 FROM zfit_xd_def_lsd INTO TABLE @DATA(lt_db). "#EC CI_NOWHERE
+
+        gs_clazy-val-def_land_sd_val = VALUE #(
+          FOR ls_db IN lt_db (
+            val = CORRESPONDING #( ls_db )
+            land1_rng = VALUE #( (
+              option = zcl_bc_ddic_toolkit=>c_option_eq
+              sign   = ls_db-ddsign
+              low    = ls_db-land1
+            ) )
+          )
+        ).
+
+        gs_clazy-flg-def_land_sd_val = abap_true.
+      ENDIF.
+
+      DATA(lv_found) = abap_false.
+
+      LOOP AT gs_clazy-val-def_land_sd_val ASSIGNING FIELD-SYMBOL(<ls_db>).
+        CHECK ls_cache-land1 IN <ls_db>-land1_rng.
+        ls_cache-val = <ls_db>-val.
+        lv_found = abap_true.
+      ENDLOOP.
+
+      IF lv_found IS INITIAL.
+        ls_cache-cx = NEW #(
+          textid    = zcx_bc_table_content=>entry_missing
+          objectid  = CONV #( ls_cache-land1 )
+          tabname   = c_tabname_lsd
+        ).
+      ENDIF.
+
+      INSERT ls_cache
+        INTO TABLE gt_lsv_cache
+        ASSIGNING <ls_cache>.
+
+    ENDIF.
+
+    IF <ls_cache>-cx IS NOT INITIAL.
+      RAISE EXCEPTION <ls_cache>-cx.
+    ENDIF.
+
+    rs_val = <ls_cache>-val.
+
+  ENDMETHOD.
+
+  method get_def_tax_codes.
+
+    if gt_def_Stc is initial.
+      select * from ZFIT_XD_DEF_STC into table @gt_Def_Stc. "#EC CI_NOWHERE
+      if gt_def_Stc is initial.
+        insert initial line into table gt_def_Stc.
+      endif.
+    endif.
+
+    try.
+        rs_val = corresponding #(
+          gt_def_Stc[
+            key primary_key components
+            ktokd = iv_ktokd
+          ]
+        ).
+
+      catch cx_sy_itab_line_not_found into data(lo_silnf).
+
+        raise exception type zcx_bc_table_content
+          EXPORTING
+            textid    = zcx_bc_table_content=>entry_missing
+            previous  = lo_silnf
+            objectid  = conv #( iv_ktokd )
+            tabname   = c_Tabname_def_stc.
+
+    endtry.
+
+  endmethod.
 
   METHOD get_hq_branch_codes.
 
@@ -426,18 +555,18 @@ CLASS ZCL_SD_CUSTOMER IMPLEMENTATION.
 
   ENDMETHOD.
 
-  method get_Transport_zone.
+  METHOD get_transport_zone.
 
     ro_obj = zcl_sd_transport_zone=>get_instance(
       iv_land1 = gs_def-land1
       iv_zone1 = gs_def-lzone
     ).
 
-  endmethod.
+  ENDMETHOD.
 
   METHOD read_parob_lazy.
     CHECK gs_clazy-flg-parob IS INITIAL.
-    SELECT * INTO CORRESPONDING FIELDS OF TABLE gs_clazy-val-parob FROM zsdt_cus_parob.
+    SELECT * INTO CORRESPONDING FIELDS OF TABLE gs_clazy-val-parob FROM zsdt_cus_parob. "#EC CI_NOWHERE
     gs_clazy-flg-parob = abap_true.
   ENDMETHOD.
 

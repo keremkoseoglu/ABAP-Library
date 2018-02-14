@@ -34,25 +34,21 @@ public section.
       !IV_INPUT type ANY
     exporting
       value(EV_OUTPUT) type ANY .
-
-    CLASS-METHODS char_to_dec2
-      IMPORTING
-        !iv_char      TYPE char20
-      RETURNING
-        VALUE(rv_dec) TYPE dmbtr .
-
+  class-methods CHAR_TO_DEC2
+    importing
+      !IV_CHAR type CHAR20
+    returning
+      value(RV_DEC) type DMBTR .
   class-methods CHAR_TO_DEC3
     importing
       !IV_CHAR type CHAR20
     returning
       value(RV_DEC) type MENGE_D .
-
-    CLASS-METHODS conv_10digitdate_to_8digitdate
-      IMPORTING
-        !iv_date       TYPE any
-      RETURNING
-        VALUE(rv_date) TYPE datum .
-
+  class-methods CONV_10DIGITDATE_TO_8DIGITDATE
+    importing
+      !IV_DATE type ANY
+    returning
+      value(RV_DATE) type DATUM .
   class-methods CUNIT_INPUT
     importing
       !IV_MEINS type MEINS
@@ -113,6 +109,12 @@ public section.
       !IV_VBELN type CLIKE
     returning
       value(RV_VBELN) type VBELN_VL .
+  class-methods DOMAIN_VALUE_GET
+    importing
+      !IV_DOMNAME type DD07V-DOMNAME
+      !IV_DOMVALUE type DD07V-DOMVALUE_L
+    returning
+      value(RV_DDTEXT) type DD07V-DDTEXT .
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -159,6 +161,7 @@ CLASS ZCL_BC_DDIC_TOOLKIT IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD char_to_dec2.
     DATA: lv_char TYPE char20.
     TRY.
@@ -188,6 +191,7 @@ CLASS ZCL_BC_DDIC_TOOLKIT IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD char_to_dec3.
 
     CALL FUNCTION 'OIU_ME_CHAR_TO_NUMBER'
@@ -205,6 +209,7 @@ CLASS ZCL_BC_DDIC_TOOLKIT IMPLEMENTATION.
 
 
   ENDMETHOD.
+
 
   METHOD conv_10digitdate_to_8digitdate.
 
@@ -238,6 +243,7 @@ CLASS ZCL_BC_DDIC_TOOLKIT IMPLEMENTATION.
     ENDIF.
 
   ENDMETHOD.
+
 
   METHOD cunit_input.
     CALL FUNCTION 'CONVERSION_EXIT_CUNIT_INPUT'
@@ -285,6 +291,21 @@ CLASS ZCL_BC_DDIC_TOOLKIT IMPLEMENTATION.
       CATCH cx_sy_conversion_no_number ##NO_HANDLER.
       CATCH cx_root ##NO_HANDLER.
     ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD domain_value_get.
+
+    CALL FUNCTION 'DOMAIN_VALUE_GET'
+      EXPORTING
+        i_domname  = iv_domname
+        i_domvalue = iv_domvalue
+      IMPORTING
+        e_ddtext   = rv_ddtext
+      EXCEPTIONS
+        not_exist  = 1
+        OTHERS     = 2 ##FM_SUBRC_OK.
+
   ENDMETHOD.
 
 
@@ -440,11 +461,7 @@ CLASS ZCL_BC_DDIC_TOOLKIT IMPLEMENTATION.
       EXPORTING
         input        = iv_vbeln
       IMPORTING
-        output       = rv_vbeln
-      EXCEPTIONS
-        length_error = 1
-        OTHERS       = 2
-        ##FM_SUBRC_OK.
+        output       = rv_vbeln.
 
   ENDMETHOD.
 ENDCLASS.

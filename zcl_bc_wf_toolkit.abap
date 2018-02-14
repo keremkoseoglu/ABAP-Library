@@ -5,6 +5,9 @@ CLASS zcl_bc_wf_toolkit DEFINITION
 
   PUBLIC SECTION.
 
+    constants:
+      c_wi_Type_w type SWW_WITYPE value 'W'.
+
     CLASS-METHODS:
       refresh_buffer EXPORTING et_msg TYPE tab_bdcmsgcoll.
 
@@ -17,7 +20,8 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_wf_toolkit IMPLEMENTATION.
+CLASS ZCL_BC_WF_TOOLKIT IMPLEMENTATION.
+
 
   METHOD refresh_buffer.
 
@@ -37,5 +41,4 @@ CLASS zcl_bc_wf_toolkit IMPLEMENTATION.
     ).
 
   ENDMETHOD.
-
 ENDCLASS.

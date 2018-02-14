@@ -74,6 +74,7 @@ public section.
       !IT_ATT_SPOOL type TT_ATTACHMENT_SPOOL optional
       !IV_REQUESTED_STATUS type BCS_RQST default 'E'
       value(IV_COMMIT) type CHAR1 default 'X'
+      !IV_LONG_SUBJECT type STRING optional
     raising
       ZCX_BC_MAIL_SEND .
   class-methods SEND_EMAIL_WITH_SAP_LINK
@@ -260,16 +261,13 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
         ENDIF.
 
 *       kullanıcı adı ya da dağıtım listesi tanımlı olmalı
-*        if ( it_to    is not supplied and
-*             it_dlist is not supplied and
-*             it_rlist is not supplied ) or
-*           ( it_to is supplied and it_to[] is initial ) or
-*           ( it_dlist is supplied and it_dlist[] is initial ) or
-*           ( it_rlist is supplied and it_rlist[] is initial ) .
-        IF
-          it_to[] IS INITIAL AND
-          it_dlist[] IS INITIAL AND
-          it_rlist[] IS INITIAL .
+
+        IF it_to[] IS INITIAL AND
+           it_dlist[] IS INITIAL AND
+           it_rlist[] IS INITIAL.
+
+         check iv_tolerate_no_addr eq abap_false.
+
           RAISE EXCEPTION TYPE zcx_bc_method_parameter
             EXPORTING
               class_name  = 'ZCL_BC_MAIL_FACADE'
@@ -289,7 +287,9 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
                                                            i_text    = it_body_html
                                                            i_subject = iv_subject ).
         ENDIF.
-
+        if iv_long_subject is NOT INITIAL.
+          lo_send_request->set_message_subject( iv_long_subject ).
+        endif.
 
 *       Attachment
 
@@ -312,9 +312,13 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
         IF it_att_spool IS SUPPLIED.
           LOOP AT it_att_spool ASSIGNING FIELD-SYMBOL(<ls_att_spool>).
 
-            zcl_bc_toolkit=>conv_spool_to_pdf( EXPORTING iv_spoolid = <ls_att_spool>-spoolid
-                                                         iv_partnum = <ls_att_spool>-partnum
-                                               IMPORTING et_solix   = DATA(lt_pdf_solix) ).
+            zcl_bc_spool_toolkit=>conv_spool_to_pdf(
+                EXPORTING
+                    iv_spoolid = <ls_att_spool>-spoolid
+                    iv_partnum = <ls_att_spool>-partnum
+                 IMPORTING
+                    et_solix   = DATA(lt_pdf_solix)
+            ).
 
             lo_doc->add_attachment( i_attachment_type    = c_att_type_pdf
                                     i_attachment_subject = <ls_att_spool>-att_subject
@@ -386,36 +390,20 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD SEND_EXCEL_TABLE_EMAIL.
+  METHOD send_excel_table_email.
 
-    DATA : lo_table  TYPE REF TO cl_abap_tabledescr,
-           lo_str    TYPE REF TO cl_abap_structdescr,
-           lo_element_type type ref to cl_abap_elemdescr,
-           lt_lines  TYPE TABLE OF tline.
-  data:    lt_components   type cl_abap_structdescr=>component_table,
-           ls_field        type dfies.
+    DATA : lo_table        TYPE REF TO cl_abap_tabledescr,
+           lo_str          TYPE REF TO cl_abap_structdescr,
+           lo_element_type TYPE REF TO cl_abap_elemdescr.
 
-    DATA : lt_output_soli TYPE TABLE OF soli,
-           ls_output_soli TYPE          soli,
-           lt_objpack     TYPE TABLE OF sopcklsti1,
-           ls_objpack     TYPE          sopcklsti1,
-           lt_objhead     TYPE TABLE OF solisti1,
-           lt_objtxt      TYPE TABLE OF solisti1,
-           ls_objtxt      TYPE          solisti1,
-           lt_reclist     TYPE TABLE OF somlreci1,
-           ls_reclist     TYPE          somlreci1,
-           ls_doc_chng    TYPE          sodocchgi1.
+    DATA: lt_components TYPE cl_abap_structdescr=>component_table,
+          ls_field      TYPE dfies.
 
-    DATA : lv_lines       TYPE sy-tabix,
-           lv_msg_lines   TYPE sy-tabix,
-           lv_sent_all(1) TYPE c        ##NEEDED.
+    DATA lv_sent_all(1) TYPE c        ##NEEDED.
 
-    DATA : lv_line_data    TYPE i,
-           lv_line_columns TYPE i.
-
-  data: lt_binary_text  type solix_tab,
-        lv_text         type string,
-        lv_size         type so_obj_len.
+    DATA: lt_binary_text TYPE solix_tab,
+          lv_text        TYPE string,
+          lv_zcolumn     TYPE column_z5_z5a.
 
     TRY.
 
@@ -424,50 +412,56 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
         lo_str   ?= lo_table->get_table_line_type( ).
         lt_components   = lo_str->get_components( ).
 
-        loop at lt_components assigning FIELD-SYMBOL(<fs_component>).
-          if sy-tabix gt 1.
-             concatenate lv_text cl_bcs_convert=>gc_tab into lv_text.
-          endif.
+        LOOP AT lt_components ASSIGNING FIELD-SYMBOL(<fs_component>).
+          lv_zcolumn = sy-tabix.
+          IF sy-tabix GT 1.
+            CONCATENATE lv_text cl_bcs_convert=>gc_tab INTO lv_text.
+          ENDIF.
           lo_element_type ?= <fs_component>-type.
           ls_field         = lo_element_type->get_ddic_field( ).
-          concatenate lv_text ls_field-scrtext_l into lv_text.
-        endloop.
-       concatenate lv_text cl_bcs_convert=>gc_crlf into lv_text.
-       data: lv_text_tmp(100) TYPE c.
-       loop at t_data assigning FIELD-SYMBOL(<fs_row>).
-          loop at lt_components assigning <fs_component>.
-            if sy-tabix gt 1.
-              concatenate lv_text cl_bcs_convert=>gc_tab into lv_text.
-            endif.
-            assign component <fs_component>-name of structure <fs_row> to FIELD-SYMBOL(<fs_field>).
-            WRITE <fs_field> to lv_text_tmp.
+          "--------->> add by mehmet sertkaya 23.12.2016 15:04:39
+          READ TABLE t_columns ASSIGNING FIELD-SYMBOL(<ls_columns>)
+                     WITH KEY zcolumn = lv_zcolumn.
+          IF sy-subrc EQ 0.
+            ls_field-scrtext_l = <ls_columns>-zcolumn_txt.
+          ENDIF.
+          "-----------------------------<<
+          CONCATENATE lv_text ls_field-scrtext_l INTO lv_text.
+        ENDLOOP.
+        CONCATENATE lv_text cl_bcs_convert=>gc_crlf INTO lv_text.
+        DATA: lv_text_tmp(100) TYPE c.
+        LOOP AT t_data ASSIGNING FIELD-SYMBOL(<fs_row>).
+          LOOP AT lt_components ASSIGNING <fs_component>.
+            IF sy-tabix GT 1.
+              CONCATENATE lv_text cl_bcs_convert=>gc_tab INTO lv_text.
+            ENDIF.
+            ASSIGN COMPONENT <fs_component>-name OF STRUCTURE <fs_row> TO FIELD-SYMBOL(<fs_field>).
+            WRITE <fs_field> TO lv_text_tmp.
             CONDENSE lv_text_tmp.
-            concatenate lv_text lv_text_tmp into lv_text.
-          endloop.
-          concatenate lv_text cl_bcs_convert=>gc_crlf into lv_text.
-        endloop.
-       try .
-           cl_bcs_convert=>string_to_solix(
-             exporting
-               iv_string   = lv_text
-               iv_codepage = '4103' "suitable for MS Excel, leave empty"
-               iv_add_bom  = abap_true
-             importing
-               et_solix    = lt_binary_text
-               ev_size     = lv_size ).
-         catch cx_bcs into data(lo_bcs_exception).
-*           append lv_bcs_message to lt_return.
-           data(lv_bcs_message) = lo_bcs_exception->get_text( ).
-           exit.
-       endtry.
+            CONCATENATE lv_text lv_text_tmp INTO lv_text.
+          ENDLOOP.
+          CONCATENATE lv_text cl_bcs_convert=>gc_crlf INTO lv_text.
+        ENDLOOP.
+        TRY .
+            cl_bcs_convert=>string_to_solix(
+              EXPORTING
+                iv_string   = lv_text
+                iv_codepage = '4103' "suitable for MS Excel, leave empty"
+                iv_add_bom  = abap_true
+              IMPORTING
+                et_solix    = lt_binary_text
+            ).
+          CATCH cx_bcs.
+            RETURN.
+        ENDTRY.
 
-       send_email( exporting
-                    it_to      = it_to
-                    it_dlist   = it_dlist
-                    it_rlist   = it_rlist
-                    iv_subject = iv_subject
-                    it_body    = it_body[]
-                    it_att_bin = VALUE #( att_type = 'XLS' ( att_subject = iv_filename att_content =  lt_binary_text[] ) ) ).
+        send_email( EXPORTING
+                     it_to      = it_to
+                     it_dlist   = it_dlist
+                     it_rlist   = it_rlist
+                     iv_subject = iv_subject
+                     it_body    = it_body[]
+                     it_att_bin = VALUE #( att_type = 'XLS' ( att_subject = iv_filename att_content =  lt_binary_text[] ) ) ).
 
 
 

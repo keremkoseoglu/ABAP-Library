@@ -191,6 +191,11 @@ public section.
       !IV_COUNT type INT4 default 100
     changing
       !CX_ROOT type ref to CX_ROOT .
+  class-methods GUI_MESSAGE
+    importing
+      !IV_INDEX type I
+      !IV_LEVEL type I
+      !IV_MESSAGE type TEXT100 .
   PROTECTED SECTION.
 private section.
 
@@ -1172,6 +1177,35 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD gui_message.
+
+    DATA: lv_index(8)     TYPE c,
+          lv_level(2)     TYPE c,
+          lv_message(132) TYPE c,
+          lv_rate         TYPE i.
+
+
+
+
+    lv_rate = iv_index * 100 / iv_level.
+
+    MOVE: iv_index     TO lv_index,
+          lv_level     TO lv_level,
+          iv_message   TO lv_message.
+
+    CONDENSE: lv_index, lv_message.
+
+    CONCATENATE: '(' lv_index '/' lv_level ')' INTO lv_index,
+                 lv_index lv_message INTO lv_message SEPARATED BY space.
+
+    CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
+      EXPORTING
+        percentage = lv_rate
+        text       = lv_message.
+
+  ENDMETHOD.
+
+
   METHOD perpare_number.
     DATA lv_strlen TYPE i.
     DATA lv_last_decimal TYPE i.
@@ -1435,139 +1469,160 @@ CLASS ZCL_BC_GUI_TOOLKIT IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD upload_excel_file_data.
+  method upload_excel_file_data.
 
-    DATA: lt_tabcde     TYPE TABLE OF alsmex_tabline,
-          ls_tabcde     TYPE alsmex_tabline,
-          lv_file       TYPE rlgrap-filename,
-          lv_line       TYPE i,
+    data: lt_tabcde     type table of alsmex_tabline,
+          ls_tabcde     type alsmex_tabline,
+          lv_file       type rlgrap-filename,
+          lv_line       type i,
 *          lv_line_excel type i,
-          lv_tind(4)    TYPE n,
-          lo_line       TYPE REF TO data,
-          lt_definition TYPE STANDARD TABLE OF dd03p,
-          ls_dd02v_n    TYPE dd02v,
-          lv_fname      TYPE rs38l_fnam.
+          lv_tind(4)    type n,
+          lo_line       type ref to data,
+          lt_definition type standard table of dd03p,
+          ls_dd02v_n    type dd02v,
+          lv_fname      type rs38l_fnam.
 
 
-    IF iv_filename IS NOT  INITIAL.
+    if iv_filename is not  initial.
       lv_file = iv_filename.
-    ELSE.
-      lv_file = CONV rlgrap-filename( get_file( ) ) ##OPERATOR.
-    ENDIF.
+    else.
+      lv_file = conv rlgrap-filename( get_file( ) ) ##OPERATOR.
+    endif.
 
-    IF iv_line IS INITIAL.
+    if iv_line is initial.
       lv_line = 1.
-    ELSE.
+    else.
       lv_line = iv_line.
-    ENDIF.
-
-
-    CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE' ##FM_SUBRC_OK
-      EXPORTING
-        filename                = lv_file
-        i_begin_col             = 1
-        i_begin_row             = lv_line
-        i_end_col               = 999
-        i_end_row               = 999999
-      TABLES
-        intern                  = lt_tabcde
-      EXCEPTIONS
-        inconsistent_parameters = 1
-        upload_ole              = 2
-        OTHERS                  = 3.
+    endif.
 
 *--------------------------------------------------------------------*
 * Tablonun detayını al
 *--------------------------------------------------------------------*
-    CALL FUNCTION 'DD_INT_TABL_GET'
-      EXPORTING
+    call function 'DD_INT_TABL_GET'
+      exporting
         tabname        = iv_structure_name
-      IMPORTING
+      importing
         dd02v_n        = ls_dd02v_n
-      TABLES
+      tables
         dd03p_n        = lt_definition
-      EXCEPTIONS
+      exceptions
         internal_error = 1.
 
-    IF sy-subrc EQ 0 AND lines( lt_definition ) GT 0.
+    if sy-subrc eq 0 and lines( lt_definition ) gt 0.
 
-      CALL FUNCTION 'DD_TABL_EXPAND' ##FM_SUBRC_OK
-        EXPORTING
+      call function 'DD_TABL_EXPAND' ##FM_SUBRC_OK
+        exporting
           dd02v_wa          = ls_dd02v_n
           mode              = 46
           prid              = 0
-        TABLES
+        tables
           dd03p_tab         = lt_definition
-        EXCEPTIONS
+        exceptions
           illegal_parameter = 1.
 
-    ENDIF.
+    endif.
 
-    IF lines( lt_definition ) EQ 0.
-      RAISE error_structure_read.
-    ENDIF.
+    if lines( lt_definition ) eq 0.
+      raise error_structure_read.
+    endif.
 
-    DELETE lt_definition WHERE fieldname EQ '.INCLUDE'.
+    delete lt_definition where fieldname eq '.INCLUDE'.
+
+
+    call function 'ALSM_EXCEL_TO_INTERNAL_TABLE' ##FM_SUBRC_OK
+      exporting
+        filename                = lv_file
+        i_begin_col             = 1
+        i_begin_row             = lv_line
+        i_end_col               = lines( lt_definition )
+        i_end_row               = 999999
+      tables
+        intern                  = lt_tabcde
+      exceptions
+        inconsistent_parameters = 1
+        upload_ole              = 2
+        others                  = 3.
+    if sy-subrc ne 0.
+      call function 'ALSM_EXCEL_TO_INTERNAL_TABLE' ##FM_SUBRC_OK
+        exporting
+          filename                = lv_file
+          i_begin_col             = 1
+          i_begin_row             = lv_line
+          i_end_col               = lines( lt_definition )
+          i_end_row               = 65000
+        tables
+          intern                  = lt_tabcde
+        exceptions
+          inconsistent_parameters = 1
+          upload_ole              = 2
+          others                  = 3.
+      if sy-subrc ne 0.
+         message i001(ls) with lv_file text-e01.
+      endif.
+
+    endif.
+
+
 *--------------------------------------------------------------------*
 * MAPPING
 *--------------------------------------------------------------------*
-    FIELD-SYMBOLS : <fs_value> TYPE any,
-                    <fs_table> TYPE STANDARD TABLE,
-                    <fs_lines> TYPE any.
+    field-symbols : <fs_value> type any,
+                    <fs_table> type standard table,
+                    <fs_lines> type any.
 
 *    assign rt_table->* to <fs_table>.
-    ASSIGN ct_table TO <fs_table>.
+    assign ct_table to <fs_table>.
 *    check sy-subrc eq 0.
 *
-    CREATE DATA lo_line LIKE LINE OF <fs_table>.
-    ASSIGN lo_line->* TO <fs_lines>.
-    CHECK sy-subrc EQ 0.
+    create data lo_line like line of <fs_table>.
+    assign lo_line->* to <fs_lines>.
+    check sy-subrc eq 0.
 
-    LOOP AT lt_tabcde INTO ls_tabcde.
+    loop at lt_tabcde into ls_tabcde.
       lv_tind = ls_tabcde-col.
 *      lv_line_excel = ls_tabcde-row.
 *      check lv_line_excel ge l1v_line.
-      READ TABLE lt_definition ASSIGNING FIELD-SYMBOL(<fs_definition>) INDEX lv_tind.
-      IF sy-subrc EQ 0.
-        ASSIGN COMPONENT <fs_definition>-fieldname
-               OF STRUCTURE <fs_lines> TO <fs_value>.
-        IF sy-subrc EQ 0.
+      read table lt_definition assigning field-symbol(<fs_definition>) index lv_tind.
+      if sy-subrc eq 0.
+        assign component <fs_definition>-fieldname
+               of structure <fs_lines> to <fs_value>.
+        if sy-subrc eq 0.
 *--------------------------------------------------------------------*
 * Dönüşüm işlemi...
 *--------------------------------------------------------------------*
-          TRY.
-              convert_any_input_to_data( EXPORTING iv_source = ls_tabcde-value
-                                         CHANGING  cv_target = <fs_value> ).
-            CATCH cx_root INTO DATA(lo_cx).
-              MESSAGE lo_cx->previous TYPE 'S' DISPLAY LIKE 'E'.
-              RAISE conversion_error.
+          try.
+              convert_any_input_to_data( exporting iv_source = ls_tabcde-value
+                                         changing  cv_target = <fs_value> ).
+            catch cx_root into data(lo_cx).
+              message lo_cx->previous type 'S' display like 'E'.
+              raise conversion_error.
 
-          ENDTRY.
+          endtry.
 
-          IF <fs_definition>-convexit IS NOT INITIAL AND
-             <fs_definition>-inttype NE 'P'.
+          if <fs_definition>-convexit is not initial and
+             <fs_definition>-inttype ne 'P'.
             lv_fname = 'CONVERSION_EXIT_' &&
                        <fs_definition>-convexit &&
                        '_INPUT'.
 
-            CALL FUNCTION lv_fname ##FM_SUBRC_OK
-              EXPORTING
+            call function lv_fname ##FM_SUBRC_OK
+              exporting
                 input  = <fs_value>
-              IMPORTING
+              importing
                 output = <fs_value>
-              EXCEPTIONS
-                OTHERS = 1.
+              exceptions
+                others = 1.
 
-          ENDIF.
-        ENDIF.
-      ENDIF.
+          endif.
+        endif.
+      endif.
 
-      AT END OF row.
-        APPEND <fs_lines> TO <fs_table>.
-        CLEAR <fs_lines>.
-      ENDAT.
-    ENDLOOP.
-  ENDMETHOD.
+      at end of row.
+        append <fs_lines> to <fs_table>.
+        clear <fs_lines>.
+      endat.
+    endloop.
+  endmethod.
 
 
   METHOD write_cx_msg_matryoshka.

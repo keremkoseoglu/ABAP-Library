@@ -19,9 +19,11 @@ CLASS zcl_fi_company DEFINITION
       RETURNING
         VALUE(ro_obj) TYPE REF TO zcl_fi_company
       RAISING
-        zcx_bc_table_content .
+        zcx_fi_company_code_def .
 
-    methods get_kokrs returning value(rv_kokrs) type tka02-kokrs.
+    METHODS:
+      get_kokrs RETURNING VALUE(rv_kokrs) TYPE tka02-kokrs,
+      get_mat_control_record RETURNING VALUE(rs_marv) TYPE marv.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -30,18 +32,20 @@ CLASS zcl_fi_company DEFINITION
 
     TYPES:
 
-      begin of t_lazy_flg,
-        kokrs type abap_bool,
-      end of t_lazy_flg,
+      BEGIN OF t_lazy_flg,
+        kokrs TYPE abap_bool,
+        marv  TYPE abap_bool,
+      END OF t_lazy_flg,
 
-      begin of t_lazy_val,
-        kokrs type tka02-kokrs,
-      end of t_lazy_val,
+      BEGIN OF t_lazy_val,
+        kokrs TYPE tka02-kokrs,
+        marv  TYPE marv,
+      END OF t_lazy_val,
 
-      begin of t_lazy,
-        flg type t_lazy_flg,
-        val type t_lazy_val,
-      end of t_lazy,
+      BEGIN OF t_lazy,
+        flg TYPE t_lazy_flg,
+        val TYPE t_lazy_val,
+      END OF t_lazy,
 
       BEGIN OF t_multiton,
         bukrs TYPE bukrs,
@@ -54,7 +58,7 @@ CLASS zcl_fi_company DEFINITION
 
     CLASS-DATA gt_multiton TYPE tt_multiton.
 
-    data gs_lazy type t_lazy.
+    DATA gs_lazy TYPE t_lazy.
 
 ENDCLASS.
 
@@ -82,11 +86,16 @@ CLASS ZCL_FI_COMPANY IMPLEMENTATION.
         WHERE bukrs EQ ls_multiton-bukrs.
 
       IF sy-subrc NE 0.
-        RAISE EXCEPTION TYPE zcx_bc_table_content
+
+        RAISE EXCEPTION TYPE zcx_fi_company_code_def
           EXPORTING
-            textid   = zcx_bc_table_content=>value_missing
-            objectid = CONV #( ls_multiton-bukrs )
-            tabname  = c_tabname_t001.
+            bukrs    = ls_multiton-bukrs
+            previous = NEW zcx_bc_table_content(
+              textid   = zcx_bc_table_content=>value_missing
+              objectid = CONV #( ls_multiton-bukrs )
+              tabname  = c_tabname_t001
+            ).
+
       ENDIF.
 
       INSERT ls_multiton INTO TABLE gt_multiton ASSIGNING <ls_multiton>.
@@ -98,14 +107,31 @@ CLASS ZCL_FI_COMPANY IMPLEMENTATION.
   ENDMETHOD.
 
 
-  method get_kokrs.
+  METHOD get_kokrs.
 
-    if gs_lazy-flg-kokrs is initial.
-      select single kokrs into @gs_lazy-val-kokrs from tka02 where bukrs eq @gs_def-bukrs ##WARN_OK.
-      gs_lazy-flg-kokrs = Abap_true.
-    endif.
+    IF gs_lazy-flg-kokrs IS INITIAL.
+      SELECT SINGLE kokrs INTO @gs_lazy-val-kokrs FROM tka02 WHERE bukrs EQ @gs_def-bukrs ##WARN_OK.
+      gs_lazy-flg-kokrs = abap_true.
+    ENDIF.
 
     rv_kokrs = gs_lazy-val-kokrs.
 
-  endmethod.
+  ENDMETHOD.
+
+
+  METHOD get_mat_control_record.
+
+    IF gs_lazy-flg-marv EQ abap_false.
+
+      SELECT SINGLE *
+        FROM marv
+        WHERE bukrs EQ @gs_def-bukrs
+        INTO @gs_lazy-val-marv.
+
+      gs_lazy-flg-marv = abap_true.
+    ENDIF.
+
+    rs_marv = gs_lazy-val-marv.
+
+  ENDMETHOD.
 ENDCLASS.

@@ -6,35 +6,23 @@ CLASS zcl_bc_transport_request DEFINITION
   PUBLIC SECTION.
 
     TYPES:
-      tt_as4text_rng  TYPE RANGE OF e07t-as4text,
-
-      tt_obj_name_rng TYPE RANGE OF e071-obj_name,
-      tt_object_rng   TYPE RANGE OF e071-object,
-
+      tt_as4text_rng  TYPE RANGE OF e07t-as4text .
+    TYPES:
+      tt_obj_name_rng TYPE RANGE OF e071-obj_name .
+    TYPES:
+      tt_object_rng   TYPE RANGE OF e071-object .
+    TYPES:
       BEGIN OF t_trkorr,
         trkorr TYPE trkorr,
-      END OF t_trkorr,
+      END OF t_trkorr .
+    TYPES:
+      tt_trkorr    TYPE STANDARD TABLE OF t_trkorr WITH DEFAULT KEY .
+    TYPES:
+      tt_pgmid_rng TYPE RANGE OF e071-pgmid .
 
-      tt_trkorr    TYPE STANDARD TABLE OF t_trkorr WITH DEFAULT KEY,
-
-      tt_pgmid_rng TYPE RANGE OF e071-pgmid,
-
-      BEGIN OF t_request,
-        trkorr     TYPE e070-trkorr,
-        trfunction TYPE e070-trfunction,
-        trftxt     TYPE dd07t-ddtext,
-        trstatus   TYPE e070-trstatus,
-        as4text    TYPE e07t-as4text,
-        as4user    TYPE e070-as4user,
-        strkorr    TYPE e070-strkorr,
-        as4date    TYPE e070-as4date,
-        as4time    TYPE e070-as4time,
-      END OF t_request,
-
-      tt_request        TYPE STANDARD TABLE OF t_request WITH DEFAULT KEY,
-
-      tt_request_object TYPE STANDARD TABLE OF e071      WITH DEFAULT KEY,
-
+    TYPES:
+      tt_request_object TYPE STANDARD TABLE OF e071      WITH DEFAULT KEY .
+    TYPES:
       BEGIN OF t_request_and_object,
         trkorr   TYPE e070-trkorr,
         as4text  TYPE e07t-as4text,
@@ -42,292 +30,297 @@ CLASS zcl_bc_transport_request DEFINITION
         pgmid    TYPE e071-pgmid,
         object   TYPE e071-object,
         obj_name TYPE e071-obj_name,
-      END OF t_request_and_object,
-
-      tt_request_and_object TYPE STANDARD TABLE OF t_request_and_object WITH DEFAULT KEY,
-
-      tt_request_attribute  TYPE STANDARD TABLE OF e070a WITH DEFAULT KEY,
-
+      END OF t_request_and_object .
+    TYPES:
+      tt_request_and_object TYPE STANDARD TABLE OF t_request_and_object WITH DEFAULT KEY .
+    TYPES:
+      tt_request_attribute  TYPE STANDARD TABLE OF e070a WITH DEFAULT KEY .
+    TYPES:
       BEGIN OF t_request_object_tag,
         pgmid    TYPE e071-pgmid,
         object   TYPE e071-object,
         obj_name TYPE e071-obj_name,
-      END OF t_request_object_tag,
-
-      tt_request_object_tag TYPE STANDARD TABLE OF t_request_object_tag WITH DEFAULT KEY,
-
+      END OF t_request_object_tag .
+    TYPES:
+      tt_request_object_tag TYPE STANDARD TABLE OF t_request_object_tag WITH DEFAULT KEY .
+    TYPES:
       BEGIN OF t_request_object_type,
         pgmid  TYPE e071-pgmid,
         object TYPE e071-object,
-      END OF t_request_object_type,
-
-      tt_request_key     TYPE STANDARD TABLE OF e071k     WITH DEFAULT KEY,
-
-      tt_request_nametab TYPE STANDARD TABLE OF e071kf    WITH DEFAULT KEY,
-
+      END OF t_request_object_type .
+    TYPES:
+      tt_request_key     TYPE STANDARD TABLE OF e071k     WITH DEFAULT KEY .
+    TYPES:
+      tt_request_nametab TYPE STANDARD TABLE OF e071kf    WITH DEFAULT KEY .
+    TYPES:
       BEGIN OF t_content,
         object    TYPE tt_request_object,
         key       TYPE tt_request_key,
         nametab   TYPE tt_request_nametab,
         attribute TYPE tt_request_attribute,
-      END OF t_content,
-
+      END OF t_content .
+    TYPES:
       BEGIN OF t_request_obj,
         trkorr TYPE trkorr,
         obj    TYPE REF TO zcl_bc_transport_request,
-      END OF t_request_obj,
+      END OF t_request_obj .
+    TYPES:
+      tt_request_obj    TYPE STANDARD TABLE OF t_request_obj WITH DEFAULT KEY .
 
-      tt_request_obj    TYPE STANDARD TABLE OF t_request_obj WITH DEFAULT KEY,
-
-      tt_trfunction_rng TYPE RANGE OF e070-trfunction,
-      tt_trkorr_rng     TYPE RANGE OF e070-trkorr,
-      tt_trstatus_rng   TYPE RANGE OF e070-trstatus,
-
+    TYPES:
+      tt_trstatus_rng   TYPE RANGE OF e070-trstatus .
+    TYPES:
       BEGIN OF t_request_param,
-        s_trkorr            TYPE tt_trkorr_rng,
-        s_trfunction        TYPE tt_trfunction_rng,
+        s_trkorr            TYPE zbctt_trkorr_rng,
+        s_trfunction        TYPE zbctt_trfunction_rng,
         s_trstatus          TYPE tt_trstatus_rng,
         s_as4text           TYPE tt_as4text_rng,
+        s_as4date           TYPE date_t_range,
         p_must_have_subtask TYPE abap_bool,
         p_srch_strkorr      TYPE abap_bool,
         p_ignore_trkorr     TYPE abap_bool,
-      END OF t_request_param,
-
+      END OF t_request_param .
+    TYPES:
       BEGIN OF t_user,
         bname TYPE xubname,
-      END OF t_user,
+      END OF t_user .
+    TYPES:
+      tt_user TYPE STANDARD TABLE OF t_user WITH DEFAULT KEY .
 
-      tt_user TYPE STANDARD TABLE OF t_user WITH DEFAULT KEY.
+    CONSTANTS c_domain_trf TYPE dd07t-domname VALUE 'TRFUNCTION' ##NO_TEXT.
+    CONSTANTS c_object_cinc TYPE e071-object VALUE 'CINC' ##NO_TEXT.
+    CONSTANTS c_object_clas TYPE e071-object VALUE 'CLAS' ##NO_TEXT.
+    CONSTANTS c_object_clsd TYPE e071-object VALUE 'CLSD' ##NO_TEXT.
+    CONSTANTS c_object_cpub TYPE e071-object VALUE 'CPUB' ##NO_TEXT.
+    CONSTANTS c_object_cpri TYPE e071-object VALUE 'CPRI' ##NO_TEXT.
+    CONSTANTS c_object_doma TYPE e071-object VALUE 'DOMA' ##NO_TEXT.
+    CONSTANTS c_object_domd TYPE e071-object VALUE 'DOMD' ##NO_TEXT.
+    CONSTANTS c_object_dted TYPE e071-object VALUE 'DTED' ##NO_TEXT.
+    CONSTANTS c_object_dtel TYPE e071-object VALUE 'DTEL' ##NO_TEXT.
+    CONSTANTS c_object_tabd TYPE e071-object VALUE 'TABD' ##NO_TEXT.
+    CONSTANTS c_object_tabl TYPE e071-object VALUE 'TABL' ##NO_TEXT.
+    CONSTANTS c_object_intf TYPE e071-object VALUE 'INTF' ##NO_TEXT.
+    CONSTANTS c_object_meth TYPE e071-object VALUE 'METH' ##NO_TEXT.
+    CONSTANTS c_object_prog TYPE e071-object VALUE 'PROG' ##NO_TEXT.
+    CONSTANTS c_pgmid_corr TYPE e071-pgmid VALUE 'CORR' ##NO_TEXT.
+    CONSTANTS c_pgmid_limu TYPE e071-pgmid VALUE 'LIMU' ##NO_TEXT.
+    CONSTANTS c_pgmid_r3tr TYPE e071-pgmid VALUE 'R3TR' ##NO_TEXT.
+    CONSTANTS c_trfunction_cust TYPE trfunction VALUE 'W' ##NO_TEXT.
+    CONSTANTS c_trfunction_cust_task TYPE trfunction VALUE 'Q' ##NO_TEXT.
+    CONSTANTS c_trfunction_toc TYPE trfunction VALUE 'T' ##NO_TEXT.
+    CONSTANTS c_trfunction_unclass TYPE trfunction VALUE 'X' ##NO_TEXT.
+    CONSTANTS c_trfunction_wb TYPE trfunction VALUE 'K' ##NO_TEXT.
+    CONSTANTS c_trstatus_modif TYPE trstatus VALUE 'D' ##NO_TEXT.
+    CONSTANTS c_trstatus_modif_prot TYPE trstatus VALUE 'L' ##NO_TEXT.
+    DATA gv_trkorr TYPE trkorr READ-ONLY .
 
-    CONSTANTS:
-      c_domain_trf           TYPE dd07t-domname VALUE 'TRFUNCTION',
+    CLASS-METHODS create_new_request
+      IMPORTING
+        !iv_trfunction TYPE trfunction
+        !iv_as4text    TYPE as4text OPTIONAL
+        !it_user       TYPE tt_user OPTIONAL
+        !iv_target     TYPE tr_target OPTIONAL
+      RETURNING
+        VALUE(ro_req)  TYPE REF TO zcl_bc_transport_request
+      RAISING
+        zcx_bc_function_subrc
+        zcx_bc_table_content .
+    CLASS-METHODS get_as4text_safe
+      IMPORTING
+        !iv_trkorr        TYPE trkorr
+      RETURNING
+        VALUE(rv_as4text) TYPE as4text .
+    CLASS-METHODS get_empty_open_requests
+      IMPORTING
+        !it_trkorr_rng TYPE ZBCTT_TRKORR_RNG
+      RETURNING
+        VALUE(rt_list) TYPE zbctt_trkorr_det
+      RAISING
+        zcx_bc_function_subrc
+        zcx_bc_table_content .
+    CLASS-METHODS get_instance
+      IMPORTING
+        !iv_trkorr    TYPE trkorr
+        !iv_top       TYPE abap_bool DEFAULT abap_false
+      RETURNING
+        VALUE(ro_obj) TYPE REF TO zcl_bc_transport_request
+      RAISING
+        zcx_bc_table_content .
 
-      c_object_cinc          TYPE e071-object   VALUE 'CINC',
-      c_object_clas          TYPE e071-object   VALUE 'CLAS',
-      c_object_clsd          TYPE e071-object   VALUE 'CLSD',
-      c_object_cpub          TYPE e071-object   VALUE 'CPUB',
-      c_object_cpri          TYPE e071-object   VALUE 'CPRI',
-      c_object_doma          TYPE e071-object   VALUE 'DOMA',
-      c_object_domd          TYPE e071-object   VALUE 'DOMD',
-      c_object_dted          TYPE e071-object   VALUE 'DTED',
-      c_object_dtel          TYPE e071-object   VALUE 'DTEL',
-      c_object_tabd          TYPE e071-object   VALUE 'TABD',
-      c_object_tabl          TYPE e071-object   VALUE 'TABL',
-      c_object_intf          TYPE e071-object   VALUE 'INTF',
-      c_object_meth          TYPE e071-object   VALUE 'METH',
-      c_object_prog          TYPE e071-object   VALUE 'PROG',
+    CLASS-METHODS get_modified_objects
+      IMPORTING
+        !it_obj       TYPE zbctt_e071_obj_key
+      RETURNING
+        VALUE(rt_obj) TYPE zbctt_e071_obj_key.
 
-      c_pgmid_corr           TYPE e071-pgmid    VALUE 'CORR',
-      c_pgmid_limu           TYPE e071-pgmid    VALUE 'LIMU',
-      c_pgmid_r3tr           TYPE e071-pgmid    VALUE 'R3TR',
+    CLASS-METHODS get_open_status_rng
+      RETURNING
+        VALUE(rt_stat) TYPE tt_trstatus_rng .
+    CLASS-METHODS get_open_requests
+      IMPORTING
+        !it_as4text_rng       TYPE tt_as4text_rng OPTIONAL
+        !it_trfunction_rng    TYPE zbctt_trfunction_rng OPTIONAL
+        !iv_must_have_subtask TYPE abap_bool OPTIONAL
+      RETURNING
+        VALUE(rt_list)        TYPE zbctt_trkorr_det .
+    CLASS-METHODS get_request_list
+      IMPORTING
+        !is_param      TYPE t_request_param
+      RETURNING
+        VALUE(rt_list) TYPE zbctt_trkorr_det .
+    CLASS-METHODS get_request_and_objects
+      IMPORTING
+        !it_tag          TYPE tt_request_object_tag
+      RETURNING
+        VALUE(rt_object) TYPE tt_request_and_object .
+    CLASS-METHODS get_request_objects
+      IMPORTING
+        !it_trkorr_rng TYPE ZBCTT_TRKORR_RNG
+        !it_pgmid_rng  TYPE tt_pgmid_rng OPTIONAL
+      EXPORTING
+        !et_list       TYPE zcl_bc_dol_model=>tt_dol_list
+        !et_list_wr    TYPE zcl_bc_dol_model=>tt_dol_list_wr .
+    CLASS-METHODS get_requests_containing_obj
+      IMPORTING
+        !it_obj            TYPE tt_request_object_tag
+        !iv_top            TYPE abap_bool DEFAULT abap_true
+        !iv_holistic_cls   TYPE abap_bool DEFAULT abap_false
+        !it_trfunction_rng TYPE zbctt_trfunction_rng OPTIONAL
+      RETURNING
+        VALUE(rt_req)      TYPE tt_request_and_object .
+    CLASS-METHODS get_source_client_safe
+      IMPORTING
+        !iv_trkorr       TYPE trkorr
+      RETURNING
+        VALUE(rv_client) TYPE e070c-client .
+    CLASS-METHODS get_toc_safety_safe
+      IMPORTING
+        !iv_trkorr     TYPE trkorr
+      RETURNING
+        VALUE(rv_safe) TYPE abap_bool .
+    CLASS-METHODS get_user_creatable_trf_rng
+      RETURNING
+        VALUE(rt_func) TYPE zbctt_trfunction_rng .
 
-      c_target_live          TYPE tr_target     VALUE 'TEP',
-      c_target_qa            TYPE tr_target     VALUE 'TEQ',
-      c_target_voltran       TYPE tr_target     VALUE 'TDE',
+    CLASS-METHODS is_obj_type_class_related
+      IMPORTING
+        !is_obj_type      TYPE t_request_object_type
+      RETURNING
+        VALUE(rv_related) TYPE abap_bool .
 
-      c_trfunction_cust      TYPE trfunction    VALUE 'W',
-      c_trfunction_cust_task TYPE trfunction    VALUE 'Q',
-      c_trfunction_toc       TYPE trfunction    VALUE 'T',
-      c_trfunction_unclass   TYPE trfunction    VALUE 'X',
-      c_trfunction_wb        TYPE trfunction    VALUE 'K',
+    METHODS add_objects
+      IMPORTING
+        !it_obj               TYPE tt_request_object_tag
+        !iv_sort_and_compress TYPE abap_bool DEFAULT abap_false
+      RAISING
+        zcx_bc_function_subrc
+        RESUMABLE(zcx_bc_tr_sort_and_compress).
 
-      c_trstatus_modif       TYPE trstatus      VALUE 'D',
-      c_trstatus_modif_prot  TYPE trstatus      VALUE 'L'.
+    METHODS add_objects_from_request
+      IMPORTING
+        !it_from              TYPE tt_trkorr
+        !iv_wait              TYPE abap_bool DEFAULT abap_false
+        !iv_sort_and_compress TYPE abap_bool DEFAULT abap_false
+      RAISING
+        zcx_bc_function_subrc
+        RESUMABLE(zcx_bc_tr_sort_and_compress)
+        zcx_bc_table_content .
 
-    DATA:
-       gv_trkorr TYPE trkorr READ-ONLY.
+    METHODS complete_shi_piece_list RAISING zcx_bc_sh_piece_list_compl.
 
-    CLASS-METHODS:
+    METHODS create_subtask
+      IMPORTING
+        !it_user TYPE tt_user .
+    METHODS delete
+      RAISING
+        zcx_bc_function_subrc .
+    METHODS delete_empty_subtasks
+      RAISING
+        zcx_bc_function_subrc
+        zcx_bc_table_content .
+    METHODS delete_object
+      IMPORTING
+        !is_obj TYPE t_request_object_tag
+      RAISING
+        zcx_bc_function_subrc .
+    METHODS get_content
+      RETURNING
+        VALUE(rs_content) TYPE t_content
+      RAISING
+        zcx_bc_function_subrc
+        zcx_bc_table_content .
+    METHODS get_objects
+      IMPORTING
+        !it_pgmid_rng    TYPE tt_pgmid_rng OPTIONAL
+        !it_object_rng   TYPE tt_object_rng OPTIONAL
+        !it_obj_name_rng TYPE tt_obj_name_rng OPTIONAL
+        !it_devclass_rng TYPE zcl_bc_abap_package=>tt_package_rng OPTIONAL
+      RETURNING
+        VALUE(rt_object) TYPE tt_request_object
+      RAISING
+        zcx_bc_function_subrc
+        zcx_bc_table_content .
+    METHODS get_header
+      RETURNING
+        VALUE(rs_header) TYPE e070 .
+    METHODS get_obj_related_requests
+      IMPORTING
+        !iv_include_self   TYPE abap_bool DEFAULT abap_false
+        !iv_top            TYPE abap_bool DEFAULT abap_true
+        !it_obj_name_rng   TYPE tt_obj_name_rng OPTIONAL
+        !iv_holistic_cls   TYPE abap_bool DEFAULT abap_false
+        !it_trfunction_rng TYPE zbctt_trfunction_rng OPTIONAL
+        !it_devclass_rng   TYPE zcl_bc_abap_package=>tt_package_rng OPTIONAL
+      RETURNING
+        VALUE(rt_list)     TYPE tt_request_and_object
+      RAISING
+        zcx_bc_function_subrc
+        zcx_bc_table_content .
+    METHODS get_source_client
+      RETURNING
+        VALUE(rv_client) TYPE e070c-client .
+    METHODS get_subtasks
+      IMPORTING
+        !iv_only_empty    TYPE abap_bool DEFAULT abap_false
+      RETURNING
+        VALUE(rt_subtask) TYPE tt_request_obj
+      RAISING
+        zcx_bc_function_subrc
+        zcx_bc_table_content .
+    METHODS get_text
+      RETURNING
+        VALUE(rv_as4text) TYPE as4text .
 
-      create_new_request
-        IMPORTING
-          !iv_trfunction TYPE trfunction
-          !iv_as4text    TYPE as4text OPTIONAL
-          !it_user       TYPE tt_user OPTIONAL
-          !iv_target     TYPE tr_target OPTIONAL
-        RETURNING
-          VALUE(ro_req)  TYPE REF TO zcl_bc_transport_request
-        RAISING
-          zcx_bc_function_subrc
-          zcx_bc_table_content,
+    METHODS has_locked_object RETURNING VALUE(rv_has) TYPE abap_bool.
 
-      get_as4text_safe
-        IMPORTING !iv_trkorr        TYPE trkorr
-        RETURNING VALUE(rv_as4text) TYPE as4text,
+    METHODS is_empty
+      RETURNING
+        VALUE(rv_empty) TYPE abap_bool
+      RAISING
+        zcx_bc_function_subrc
+        zcx_bc_table_content .
+    METHODS is_toc_safe
+      RETURNING
+        VALUE(rv_safe) TYPE abap_bool .
 
-      get_empty_open_requests
-        IMPORTING
-          !it_trkorr_rng TYPE tt_trkorr_rng
-        RETURNING
-          VALUE(rt_list) TYPE tt_request
-        RAISING
-          zcx_bc_function_subrc
-          zcx_bc_table_content,
+    METHODS release
+      IMPORTING
+        !iv_rel_subtasks_too    TYPE abap_bool
+        !iv_del_empty_subtasks  TYPE abap_bool DEFAULT abap_true
+        !iv_wait_until_released TYPE abap_bool DEFAULT abap_false
+        !iv_max_rel_wait        TYPE i DEFAULT 30
+        !iv_compl_sh_piece_list TYPE abap_bool DEFAULT abap_true
+      EXPORTING
+        !ev_rel_wait_success    TYPE abap_bool
+      RAISING
+        zcx_bc_function_subrc
+        zcx_bc_table_content.
 
-      get_instance
-        IMPORTING
-                  !iv_trkorr    TYPE trkorr
-                  !iv_top       TYPE abap_bool DEFAULT abap_false
-        RETURNING
-                  VALUE(ro_obj) TYPE REF TO zcl_bc_transport_request
-        RAISING   zcx_bc_table_content,
+    METHODS sort_and_compress RAISING zcx_bc_tr_sort_and_compress.
 
-      get_open_status_rng RETURNING VALUE(rt_stat) TYPE tt_trstatus_rng,
 
-      get_open_requests
-        IMPORTING
-          !it_as4text_rng       TYPE tt_as4text_rng OPTIONAL
-          !it_trfunction_rng    TYPE tt_trfunction_rng OPTIONAL
-          !iv_must_have_subtask TYPE abap_bool OPTIONAL
-        RETURNING
-          VALUE(rt_list)        TYPE tt_request ,
 
-      get_request_list
-        IMPORTING !is_param      TYPE t_request_param
-        RETURNING VALUE(rt_list) TYPE tt_request ,
 
-      get_request_and_objects
-        IMPORTING !it_tag          TYPE tt_request_object_tag
-        RETURNING VALUE(rt_object) TYPE tt_request_and_object,
-
-      get_request_objects
-        IMPORTING
-          !it_trkorr_rng TYPE tt_trkorr_rng
-          !it_pgmid_rng  TYPE tt_pgmid_rng OPTIONAL
-        EXPORTING
-          et_list        TYPE zcl_bc_dol_model=>tt_dol_list
-          et_list_wr     TYPE zcl_bc_dol_model=>tt_dol_list_wr,
-
-      get_requests_containing_obj
-        IMPORTING
-          !it_obj            TYPE tt_request_object_tag
-          !iv_top            TYPE abap_bool DEFAULT abap_true
-          !iv_holistic_cls   TYPE abap_bool DEFAULT abap_false
-          !it_trfunction_rng TYPE tt_trfunction_rng OPTIONAL
-        RETURNING
-          VALUE(rt_req)      TYPE tt_request_and_object,
-
-      get_source_client_safe
-        IMPORTING !iv_trkorr       TYPE trkorr
-        RETURNING VALUE(rv_client) TYPE e070c-client,
-
-      get_toc_safety_safe
-        IMPORTING !iv_trkorr     TYPE trkorr
-        RETURNING VALUE(rv_safe) TYPE abap_bool,
-
-      get_user_creatable_trf_rng RETURNING VALUE(rt_func) TYPE tt_trfunction_rng ,
-
-      is_obj_type_class_related
-        IMPORTING !is_obj_type      TYPE t_request_object_type
-        RETURNING VALUE(rv_related) TYPE abap_bool.
-
-    METHODS:
-      add_objects
-        IMPORTING
-          !it_obj               TYPE tt_request_object_tag
-          !iv_sort_and_compress TYPE abap_bool DEFAULT abap_false
-        RAISING
-          zcx_bc_function_subrc
-          resumable(zcx_bc_tr_sort_and_compress),
-
-      add_objects_from_request
-        IMPORTING
-          !it_from              TYPE tt_trkorr
-          !iv_wait              TYPE abap_bool DEFAULT abap_false
-          !iv_sort_and_compress TYPE abap_bool DEFAULT abap_false
-        RAISING
-          zcx_bc_function_subrc
-          resumable(zcx_bc_tr_sort_and_compress)
-          zcx_bc_table_content,
-
-      complete_shi_piece_list RAISING zcx_bc_sh_piece_list_compl,
-
-      create_subtask IMPORTING !it_user TYPE tt_user,
-
-      delete RAISING zcx_bc_function_subrc,
-
-      delete_empty_subtasks
-        RAISING
-          zcx_bc_function_subrc
-          zcx_bc_table_content,
-
-      delete_object
-        IMPORTING !is_obj TYPE t_request_object_tag
-        RAISING   zcx_bc_function_subrc,
-
-      get_content
-        RETURNING
-          VALUE(rs_content) TYPE t_content
-        RAISING
-          zcx_bc_function_subrc
-          zcx_bc_table_content,
-
-      get_objects
-        IMPORTING
-          !it_pgmid_rng    TYPE tt_pgmid_rng    OPTIONAL
-          !it_object_rng   TYPE tt_object_rng   OPTIONAL
-          !it_obj_name_rng TYPE tt_obj_name_rng OPTIONAL
-          !it_devclass_rng TYPE zcl_bc_abap_package=>tt_package_rng OPTIONAL
-        RETURNING
-          VALUE(rt_object) TYPE tt_request_object
-        RAISING
-          zcx_bc_function_subrc
-          zcx_bc_table_content,
-
-      get_header RETURNING VALUE(rs_header) TYPE e070,
-
-      get_obj_related_requests
-        IMPORTING
-          !iv_include_self   TYPE abap_bool DEFAULT abap_false
-          !iv_top            TYPE abap_bool DEFAULT abap_true
-          !it_obj_name_rng   TYPE tt_obj_name_rng OPTIONAL
-          !iv_holistic_cls   TYPE abap_bool DEFAULT abap_false
-          !it_trfunction_rng TYPE tt_trfunction_rng OPTIONAL
-          !it_devclass_rng   TYPE zcl_bc_abap_package=>tt_package_rng OPTIONAL
-        RETURNING
-          VALUE(rt_list)     TYPE tt_request_and_object
-        RAISING
-          zcx_bc_function_subrc
-          zcx_bc_table_content,
-
-      get_source_client RETURNING VALUE(rv_client) TYPE e070c-client,
-
-      get_subtasks
-        IMPORTING
-          !iv_only_empty    TYPE abap_bool DEFAULT abap_false
-        RETURNING
-          VALUE(rt_subtask) TYPE tt_request_obj
-        RAISING
-          zcx_bc_function_subrc
-          zcx_bc_table_content,
-
-      get_text RETURNING VALUE(rv_as4text) TYPE as4text,
-
-      has_locked_object RETURNING VALUE(rv_has) TYPE abap_bool,
-
-      is_empty
-        RETURNING
-          VALUE(rv_empty) TYPE abap_bool
-        RAISING
-          zcx_bc_function_subrc
-          zcx_bc_table_content,
-
-      is_toc_safe RETURNING VALUE(rv_safe) TYPE abap_bool,
-
-      release
-        IMPORTING
-          !iv_rel_subtasks_too    TYPE abap_bool
-          !iv_del_empty_subtasks  TYPE abap_bool DEFAULT abap_true
-          !iv_wait_until_released TYPE abap_bool DEFAULT abap_false
-          !iv_max_rel_wait        TYPE i DEFAULT 30
-          !iv_compl_sh_piece_list TYPE abap_bool DEFAULT abap_true
-        EXPORTING
-          !ev_rel_wait_success    TYPE abap_bool
-        RAISING
-          zcx_bc_function_subrc
-          zcx_bc_table_content,
-
-      sort_and_compress RAISING zcx_bc_tr_sort_and_compress.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -369,10 +362,8 @@ CLASS zcl_bc_transport_request DEFINITION
       tt_obj_name TYPE STANDARD TABLE OF t_obj_name WITH DEFAULT KEY.
 
     CONSTANTS:
-      c_option_eq            TYPE ddoption VALUE 'EQ',
-      c_sign_i               TYPE ddsign   VALUE 'I',
-      c_tcode_shi_piece_list TYPE sytcode VALUE 'ZBC901',
-      c_tabname_e070         TYPE tabname VALUE 'E070'.
+      c_tabname_e070         TYPE tabname VALUE 'E070',
+      c_tcode_shi_piece_list TYPE sytcode VALUE 'ZBC901'.
 
     CLASS-DATA:
       gs_clazy_flag TYPE t_clazy_flag,
@@ -395,6 +386,7 @@ CLASS zcl_bc_transport_request DEFINITION
         RAISING
           zcx_bc_function_subrc
           zcx_bc_table_content.
+
 ENDCLASS.
 
 
@@ -592,7 +584,7 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
 
     lv_as4text = COND #(
       WHEN iv_as4text IS SUPPLIED THEN iv_as4text
-      ELSE text-321
+      ELSE TEXT-321
     ).
 
     CLEAR ls_head.
@@ -812,8 +804,8 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
 
     rt_list = get_request_list( VALUE #(
       s_trkorr        = VALUE #( FOR ls_trkorr IN lt_trkorr (
-                          option = c_option_eq
-                          sign   = c_sign_i
+                          option = zcl_bc_ddic_toolkit=>c_option_eq
+                          sign   = zcl_bc_ddic_toolkit=>c_sign_i
                           low    = ls_trkorr-trkorr
                         ) )
       s_trstatus      = get_open_status_rng( )
@@ -865,6 +857,47 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
         ELSE ls_e070-trkorr
       )
     ).
+
+  ENDMETHOD.
+
+
+  METHOD get_modified_objects.
+
+    DATA(lt_req) = get_requests_containing_obj(
+        it_obj          = it_obj
+        iv_top          = abap_true
+        iv_holistic_cls = abap_true
+    ).
+
+    DELETE lt_req WHERE trkorr+0(3) NE zcl_bc_sap_system=>c_sysid_dev.
+    SORT lt_req BY pgmid object obj_name.
+    DELETE ADJACENT DUPLICATES FROM lt_req COMPARING pgmid object obj_name. " Binary Search var
+
+    LOOP AT it_obj ASSIGNING FIELD-SYMBOL(<ls_obj>).
+
+      READ TABLE lt_req ASSIGNING FIELD-SYMBOL(<ls_req>)
+          WITH KEY
+              pgmid = <ls_obj>-pgmid
+              object = <ls_obj>-object
+              obj_name = <ls_obj>-obj_name
+          BINARY SEARCH.
+
+      IF sy-subrc EQ 0.
+        APPEND <ls_obj> TO rt_obj.
+        CONTINUE.
+      ENDIF.
+
+      CHECK is_obj_type_class_related( CORRESPONDING #( <ls_obj> ) ) EQ abap_true.
+
+      LOOP AT lt_req ASSIGNING <ls_req> WHERE obj_name+0(30) EQ <ls_obj>-obj_name+0(30).
+        APPEND CORRESPONDING #( <ls_req> ) TO rt_obj.
+      ENDLOOP.
+
+      CHECK sy-subrc EQ 0.
+
+      APPEND <ls_obj> TO rt_obj.
+
+    ENDLOOP.
 
   ENDMETHOD.
 
@@ -974,8 +1007,8 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
   METHOD get_open_status_rng.
 
     rt_stat = VALUE #(
-      option = c_option_eq
-      sign   = c_sign_i
+      option = zcl_bc_ddic_toolkit=>c_option_eq
+      sign   = zcl_bc_ddic_toolkit=>c_sign_i
       ( low = c_trstatus_modif )
       ( low = c_trstatus_modif_prot )
     ).
@@ -1045,7 +1078,7 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
             trkorr, pgmid, object, obj_name
           APPENDING CORRESPONDING FIELDS OF TABLE @lt_e071
           FROM e071
-          WHERE obj_name IN @lt_obj_name_rng.
+          WHERE obj_name IN @lt_obj_name_rng. "#EC CI_NOFIRST
 
       ENDIF.
 
@@ -1138,33 +1171,41 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
 
     IF is_param-p_ignore_trkorr EQ abap_false.
 
-      SELECT e070~trkorr, e070~trfunction, e070~trstatus,
-             e07t~as4text, e070~as4user, e070~strkorr,
-             e070~as4date, e070~as4time
+      SELECT
+            e070~trkorr, e070~trfunction, e070~trstatus,
+            e07t~as4text, e070~as4user, e070~strkorr,
+            e070~as4date, e070~as4time,
+            e070~tarsystem
         APPENDING CORRESPONDING FIELDS OF TABLE @rt_list
         FROM
           e070
           LEFT JOIN e07t ON e07t~trkorr EQ e070~trkorr
-        WHERE
+        WHERE (
           e070~trkorr     IN @is_param-s_trkorr AND
           e070~trfunction IN @is_param-s_trfunction AND
-          e070~trstatus   IN @is_param-s_trstatus
+          e070~trstatus   IN @is_param-s_trstatus AND
+          e070~as4date    IN @is_param-s_as4date
+        )
         ##TOO_MANY_ITAB_FIELDS.
 
     ENDIF.
 
     IF is_param-p_srch_strkorr EQ abap_true.
 
-      SELECT e070~trkorr, e070~trfunction, e070~trstatus, e07t~as4text,
-             e070~as4user, e070~strkorr, e070~as4date, e070~as4time
+      SELECT
+            e070~trkorr, e070~trfunction, e070~trstatus, e07t~as4text,
+            e070~as4user, e070~strkorr, e070~as4date, e070~as4time,
+            e070~tarsystem
         APPENDING CORRESPONDING FIELDS OF TABLE @rt_list
         FROM
           e070
           LEFT JOIN e07t ON e07t~trkorr EQ e070~strkorr
-        WHERE
+        WHERE (
           e070~strkorr    IN @is_param-s_trkorr AND
           e070~trfunction IN @is_param-s_trfunction AND
-          e070~trstatus   IN @is_param-s_trstatus
+          e070~trstatus   IN @is_param-s_trstatus AND
+          e070~as4date    IN @is_param-s_as4date
+        )
         ##TOO_MANY_ITAB_FIELDS.
 
     ENDIF.
@@ -1235,8 +1276,8 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
            et_list_wr.
 
     SELECT
-        @c_option_eq AS option,
-        @c_sign_i    AS sign,
+        @zcl_bc_ddic_toolkit=>c_option_eq AS option,
+        @zcl_bc_ddic_toolkit=>c_sign_i    AS sign,
         trkorr       AS low
       APPENDING CORRESPONDING FIELDS OF TABLE @lt_trkorr
       FROM e070
@@ -1245,8 +1286,8 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
       ##TOO_MANY_ITAB_FIELDS.
 
     SELECT
-        @c_option_eq AS option,
-        @c_sign_i    AS sign,
+        @zcl_bc_ddic_toolkit=>c_option_eq AS option,
+        @zcl_bc_ddic_toolkit=>c_sign_i    AS sign,
         strkorr      AS low
       APPENDING CORRESPONDING FIELDS OF TABLE @lt_trkorr
       FROM e070
@@ -1399,15 +1440,14 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
   METHOD get_user_creatable_trf_rng.
 
     rt_func = VALUE #(
-      option = c_option_eq
-      sign   = c_sign_i
+      option = zcl_bc_ddic_toolkit=>c_option_eq
+      sign   = zcl_bc_ddic_toolkit=>c_sign_i
       ( low = c_trfunction_cust )
       ( low = c_trfunction_toc )
       ( low = c_trfunction_wb )
     ).
 
   ENDMETHOD.
-
 
   METHOD has_locked_object.
 
@@ -1632,9 +1672,7 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
 
     ENDIF.
 
-
   ENDMETHOD.
-
 
   METHOD sort_and_compress.
 
@@ -1664,4 +1702,5 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
+
 ENDCLASS.

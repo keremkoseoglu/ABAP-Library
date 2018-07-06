@@ -55,11 +55,18 @@ ENDCLASS.
 
 
 
-CLASS ZCL_BC_TEXT_SEARCH_RNG_BUILDER IMPLEMENTATION.
+CLASS zcl_bc_text_search_rng_builder IMPLEMENTATION.
 
 
   METHOD constructor.
-    zcl_bc_data_element=>get_instance( iv_rollname ).
+
+    DATA(lo_dtel) = CAST zcl_bc_data_element(
+      zcl_bc_multiton=>get_obj(
+        iv_clsname  = zcl_bc_data_element=>c_clsname_me
+        iv_objectid = CONV #( iv_rollname )
+      )
+    ).
+
     gv_rollname = iv_rollname.
   ENDMETHOD.
 
@@ -71,7 +78,7 @@ CLASS ZCL_BC_TEXT_SEARCH_RNG_BUILDER IMPLEMENTATION.
 
   METHOD get_instance_by_tab_fld.
     ro_obj = get_instance_by_rollname(
-      zcl_bc_abap_Table=>get_instance( iv_Tabname )->get_rollname_of_field( iv_fldname )
+      zcl_bc_abap_table=>get_instance( iv_tabname )->get_rollname_of_field( iv_fldname )
     ).
   ENDMETHOD.
 
@@ -120,15 +127,15 @@ CLASS ZCL_BC_TEXT_SEARCH_RNG_BUILDER IMPLEMENTATION.
                      LEFT  DELETING LEADING  c_char_star,
                      LEFT  DELETING LEADING  space.
 
-    append <ls_rng> to <lt_rng> assigning field-symbol(<ls_rng_new>).
-    ASSIGN COMPONENT zcl_bc_ddic_toolkit=>c_fieldname_low OF STRUCTURE <ls_rng_new> TO field-symbol(<lv_low_new>).
+    APPEND <ls_rng> TO <lt_rng> ASSIGNING FIELD-SYMBOL(<ls_rng_new>).
+    ASSIGN COMPONENT zcl_bc_ddic_toolkit=>c_fieldname_low OF STRUCTURE <ls_rng_new> TO FIELD-SYMBOL(<lv_low_new>).
     <lv_low_new> = |{ c_char_star }{ <lv_low> }{ c_char_star }|.
 
-    append <ls_rng> to <lt_rng> assigning <ls_rng_new>.
+    APPEND <ls_rng> TO <lt_rng> ASSIGNING <ls_rng_new>.
     ASSIGN COMPONENT zcl_bc_ddic_toolkit=>c_fieldname_low OF STRUCTURE <ls_rng_new> TO <lv_low_new>.
     <lv_low_new> = |{ c_char_star }{ <lv_low> }|.
 
-    append <ls_rng> to <lt_rng> assigning <ls_rng_new>.
+    APPEND <ls_rng> TO <lt_rng> ASSIGNING <ls_rng_new>.
     ASSIGN COMPONENT zcl_bc_ddic_toolkit=>c_fieldname_low OF STRUCTURE <ls_rng_new> TO <lv_low_new>.
     <lv_low_new> = |{ <lv_low> }{ c_char_star }|.
 

@@ -184,7 +184,13 @@ CLASS ZCL_BC_DYNAMIC_ITAB IMPLEMENTATION.
       LOOP AT gt_fld ASSIGNING FIELD-SYMBOL(<ls_fld>).
 
         TRY.
-            DATA(lo_dtel) = zcl_bc_data_element=>get_instance( <ls_fld>-dtel ).
+            DATA(lo_dtel) = cast zcl_bc_data_element(
+              zcl_bc_multiton=>get_obj(
+                iv_clsname  = zcl_bc_data_element=>c_clsname_me
+                iv_objectid = conv #( <ls_fld>-dtel )
+              )
+            ).
+
             DATA(lo_doma) = lo_dtel->get_domain( ).
           CATCH cx_root .
             CONTINUE.
@@ -208,7 +214,12 @@ CLASS ZCL_BC_DYNAMIC_ITAB IMPLEMENTATION.
 
   METHOD get_instance_as_range.
 
-    zcl_bc_data_element=>get_instance( iv_rollname ).
+    DATA(lo_dtel) = cast zcl_bc_data_element(
+      zcl_bc_multiton=>get_obj(
+        iv_clsname  = zcl_bc_data_element=>c_clsname_me
+        iv_objectid = conv #( iv_rollname )
+      )
+    ).
 
     ro_obj = NEW #( VALUE #( ( fnam = zcl_bc_ddic_toolkit=>c_fieldname_sign   dtel = zcl_bc_ddic_toolkit=>c_rollname_sign )
                              ( fnam = zcl_bc_ddic_toolkit=>c_fieldname_option dtel = zcl_bc_ddic_toolkit=>c_rollname_option )

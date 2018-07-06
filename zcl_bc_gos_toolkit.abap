@@ -29,7 +29,16 @@ CLASS zcl_bc_gos_toolkit DEFINITION
       BEGIN OF t_doc_content_key,
         classname TYPE bapibds01-classname,
         objkey    TYPE swotobjid-objkey,
-      END OF t_doc_content_key.
+      END OF t_doc_content_key,
+
+      BEGIN OF t_url,
+        address     TYPE string,
+        description TYPE string,
+      END OF t_url,
+
+      tt_url
+        TYPE STANDARD TABLE OF t_url
+        WITH DEFAULT KEY.
 
     CLASS-METHODS:
       attach_doc
@@ -40,6 +49,13 @@ CLASS zcl_bc_gos_toolkit DEFINITION
           !iv_hex_string  TYPE xstring
         RAISING
           zcx_bc_gos_doc_attach,
+
+      attach_url
+        IMPORTING
+          !is_key TYPE t_doc_content_key
+          !is_url TYPE t_url
+        RAISING
+          zcx_bc_gos_url_attach,
 
       delete_doc
         IMPORTING
@@ -52,6 +68,11 @@ CLASS zcl_bc_gos_toolkit DEFINITION
       get_doc_content
         IMPORTING !is_key           TYPE t_doc_content_key
         RETURNING VALUE(rt_content) TYPE tt_doc_content
+        RAISING   zcx_bc_gos_doc_content,
+
+      get_url_list
+        IMPORTING !is_key       TYPE t_doc_content_key
+        RETURNING VALUE(rt_url) TYPE tt_url
         RAISING   zcx_bc_gos_doc_content.
 
   PROTECTED SECTION.
@@ -71,6 +92,10 @@ CLASS zcl_bc_gos_toolkit DEFINITION
       tt_string
         TYPE STANDARD TABLE OF string
         WITH DEFAULT KEY.
+
+    CONSTANTS:
+      c_object_type_url TYPE soodk-objtp VALUE 'URL',
+      c_url_prefix      TYPE char5       VALUE '&KEY&'.
 
     CLASS-DATA:
       gt_doc_content_cache TYPE tt_doc_content_cache.
@@ -181,7 +206,7 @@ CLASS zcl_bc_gos_toolkit IMPLEMENTATION.
             system_failure             = 13
             x_error                    = 14
             OTHERS                     = 15
-            ##FM_SUBRC_OK.
+            ##FM_SUBRC_OK. "#EC NUMBER_OK
 
         zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'SO_OBJECT_INSERT' ).
 
@@ -215,10 +240,10 @@ CLASS zcl_bc_gos_toolkit IMPLEMENTATION.
         COMMIT WORK AND WAIT.
 
       CATCH zcx_bc_gos_doc_attach INTO DATA(lo_attach_error).
-        ROLLBACK WORK.
+        ROLLBACK WORK.                                 "#EC CI_ROLLBACK
         RAISE EXCEPTION lo_attach_error.
       CATCH cx_root INTO DATA(lo_diaper).
-        ROLLBACK WORK.
+        ROLLBACK WORK.                                 "#EC CI_ROLLBACK
         RAISE EXCEPTION TYPE zcx_bc_gos_doc_attach
           EXPORTING
             previous = lo_diaper
@@ -227,6 +252,120 @@ CLASS zcl_bc_gos_toolkit IMPLEMENTATION.
 
 
     " https://blogs.sap.com/2013/05/23/the-gos-generic-object-services-class-that-does-all-the-work/
+
+  ENDMETHOD.
+
+  METHOD attach_url.
+
+    DATA:
+      ls_folder_id        TYPE sofdk,
+      ls_object_hd_change TYPE sood1,
+      ls_object_id        TYPE soodk.
+
+    TRY.
+
+        " ______________________________
+        " Folder ID'yi belirle
+
+        CALL FUNCTION 'SO_FOLDER_ROOT_ID_GET'
+          EXPORTING
+            region                = 'B'
+          IMPORTING
+            folder_id             = ls_folder_id
+          EXCEPTIONS
+            communication_failure = 1
+            owner_not_exist       = 2
+            system_failure        = 3
+            x_error               = 4
+            OTHERS                = 5
+            ##FM_SUBRC_OK.
+
+        zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'SO_FOLDER_ROOT_ID_GET' ).
+
+        " ______________________________
+        " URL'yi kaydet
+
+        ls_object_hd_change-objdes = is_url-description.
+        ls_object_hd_change-objla  = sy-langu.
+        ls_object_hd_change-objsns = 'O'.
+
+        DATA(lt_obj_header) = VALUE ccrctt_text_tab( ).
+        DATA(lt_data)       = VALUE soli_tab( ( line = |{ c_url_prefix }{ is_url-address }| ) ).
+
+        CALL FUNCTION 'SO_OBJECT_INSERT'
+          EXPORTING
+            folder_id                  = ls_folder_id
+            object_hd_change           = ls_object_hd_change
+            object_type                = c_object_type_url
+            owner                      = sy-uname
+          IMPORTING
+            object_id                  = ls_object_id
+          TABLES
+            objcont                    = lt_data
+            objhead                    = lt_obj_header
+          EXCEPTIONS
+            active_user_not_exist      = 1
+            communication_failure      = 2
+            component_not_available    = 3
+            dl_name_exist              = 4
+            folder_not_exist           = 5
+            folder_no_authorization    = 6
+            object_type_not_exist      = 7
+            operation_no_authorization = 8
+            owner_not_exist            = 9
+            parameter_error            = 10
+            substitute_not_active      = 11
+            substitute_not_defined     = 12
+            system_failure             = 13
+            x_error                    = 14
+            OTHERS                     = 15
+            ##FM_SUBRC_OK. "#EC NUMBER_OK
+
+        zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'SO_OBJECT_INSERT' ).
+
+        " ______________________________
+        " Bağlantıyı kaydet
+
+        DATA(ls_obj_rolea) = VALUE borident(
+          objkey  = is_key-objkey
+          objtype = is_key-classname
+        ).
+
+        DATA(ls_obj_roleb) = VALUE borident(
+          objkey  = |{ ls_folder_id-foltp }{ ls_folder_id-folyr  }{ ls_folder_id-folno }{ ls_object_id-objtp }{ ls_object_id-objyr }{ ls_object_id-objno }|
+          objtype = 'MESSAGE'
+        ).
+
+        DATA(lv_reltype) = CONV breltyp-reltype( c_object_type_url ).
+
+        CALL FUNCTION 'BINARY_RELATION_CREATE'
+          EXPORTING
+            obj_rolea      = ls_obj_rolea
+            obj_roleb      = ls_obj_roleb
+            relationtype   = lv_reltype
+          EXCEPTIONS
+            no_model       = 1
+            internal_error = 2
+            unknown        = 3
+            OTHERS         = 4
+            ##FM_SUBRC_OK.
+
+        zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'BINARY_RELATION_CREATE' ).
+
+        COMMIT WORK AND WAIT.
+
+      CATCH zcx_bc_gos_url_attach INTO DATA(lo_attach_error).
+        ROLLBACK WORK.                               "#EC CI_ROLLBACK
+        RAISE EXCEPTION lo_attach_error.
+      CATCH cx_root INTO DATA(lo_diaper).
+        RAISE EXCEPTION TYPE zcx_bc_gos_url_attach
+          EXPORTING
+            previous = lo_diaper
+            objectid = |{ is_key-classname } { is_key-objkey }|
+            url      = is_url-address.
+    ENDTRY.
+
+    " https://subrc0.wordpress.com/2012/11/13/gos-adding-an-external-link-to-an-object/
 
   ENDMETHOD.
 
@@ -244,18 +383,18 @@ CLASS zcl_bc_gos_toolkit IMPLEMENTATION.
           objtype = 'MESSAGE'
         ).
 
-        call function 'BINARY_RELATION_DELETE'
+        CALL FUNCTION 'BINARY_RELATION_DELETE'
           EXPORTING
-            obj_rolea      = ls_obj_rolea
-            obj_roleb      = ls_obj_roleb
-            relationtype   = 'ATTA'
+            obj_rolea          = ls_obj_rolea
+            obj_roleb          = ls_obj_roleb
+            relationtype       = 'ATTA'
           EXCEPTIONS
             entry_not_existing = 1
             internal_error     = 2
             no_relation        = 3
             no_role            = 4
-            others             = 5
-          ##FM_SUBRC_OK .
+            OTHERS             = 5
+            ##FM_SUBRC_OK.
 
         zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'BINARY_RELATION_DELETE' ).
 
@@ -278,11 +417,11 @@ CLASS zcl_bc_gos_toolkit IMPLEMENTATION.
             system_failure             = 12
             x_error                    = 13
             OTHERS                     = 14
-            ##FM_SUBRC_OK.
+            ##FM_SUBRC_OK. "#EC NUMBER_OK
 
         zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'SO_OBJECT_DELETE' ).
 
-        commit work and wait.
+        COMMIT WORK AND WAIT.
 
       CATCH zcx_bc_gos_doc_delete INTO DATA(lo_del_error).
         RAISE EXCEPTION lo_del_error.
@@ -317,18 +456,20 @@ CLASS zcl_bc_gos_toolkit IMPLEMENTATION.
       WHERE line+0(13) EQ '&SO_FILENAME='.
 
       ev_filename = <ls_head>-line.
-      SHIFT ev_filename LEFT BY 13 PLACES.
+      SHIFT ev_filename LEFT BY 13 PLACES. "#EC NUMBER_OK
       EXIT.
 
     ENDLOOP.
 
-    CHECK ev_filename IS NOT INITIAL.
+    IF ev_filename IS INITIAL.
+      RETURN.
+    ENDIF.
 
     " ______________________________
     " Uzantı
 
     IF ev_extension IS REQUESTED OR
-       ev_mimetype IS REQUESTED.
+       ev_mimetype  IS REQUESTED.
 
       split_filename(
         EXPORTING iv_filename  = ev_filename
@@ -486,6 +627,22 @@ CLASS zcl_bc_gos_toolkit IMPLEMENTATION.
     ENDIF.
 
     TRANSLATE ev_extension TO UPPER CASE.
+
+  ENDMETHOD.
+
+  METHOD get_url_list.
+
+    rt_url = VALUE #(
+      FOR _ls_content IN get_doc_content( is_key )
+      WHERE ( doc_data-obj_type EQ c_object_type_url )
+      (
+        description = _ls_content-doc_data-obj_descr
+        address     = zcl_bc_text_toolkit=>remove_text_in_string(
+          iv_string = VALUE #( _ls_content-txt_content[ 1 ]-line DEFAULT space )
+          iv_remove = c_url_prefix
+        )
+      )
+    ).
 
   ENDMETHOD.
 

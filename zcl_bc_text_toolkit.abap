@@ -13,7 +13,14 @@ CLASS zcl_bc_text_toolkit DEFINITION
           !it_candidate       TYPE tt_string
           !iv_ignore_if_empty TYPE abap_bool DEFAULT abap_true
         RETURNING
-          VALUE(rv_shortest)  TYPE string.
+          VALUE(rv_shortest)  TYPE string,
+
+      remove_text_in_string
+        IMPORTING
+          !iv_string       TYPE clike
+          !iv_remove       TYPE clike
+        RETURNING
+          VALUE(rv_result) TYPE string.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -46,10 +53,16 @@ CLASS zcl_bc_text_toolkit IMPLEMENTATION.
       DELETE lt_tl WHERE text IS INITIAL.
     ENDIF.
 
-    CHECK lt_tl IS NOT INITIAL.
-    SORT lt_tl BY len.
-    rv_shortest = lt_tl[ 1 ]-text.
+    IF lt_tl IS NOT INITIAL.
+      SORT lt_tl BY len.
+      rv_shortest = lt_tl[ 1 ]-text.
+    ENDIF.
 
+  ENDMETHOD.
+
+  METHOD remove_text_in_string.
+    rv_result = iv_string.
+    REPLACE ALL OCCURRENCES OF iv_remove IN rv_result WITH space.
   ENDMETHOD.
 
 ENDCLASS.

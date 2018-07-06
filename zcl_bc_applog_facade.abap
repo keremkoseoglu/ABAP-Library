@@ -33,7 +33,8 @@ CLASS zcl_bc_applog_facade DEFINITION
         !it_bapireturn1 TYPE bapiret1_tab .
     METHODS add_bapiret2
       IMPORTING
-        !it_bapiret2 TYPE bapiret2_tt .
+        !it_bapiret2 TYPE bapiret2_tt
+        !iv_cumulate TYPE abap_bool DEFAULT abap_false.
     METHODS add_bapireturn
       IMPORTING
         !it_bapireturn TYPE isi_bapireturn_tt .
@@ -43,10 +44,16 @@ CLASS zcl_bc_applog_facade DEFINITION
     METHODS add_bdcmsgcoll
       IMPORTING
         !it_bdcmsgcoll TYPE tab_bdcmsgcoll .
+
+    METHODS add_bcsy_text
+      IMPORTING
+        !it_bcsy_text TYPE bcsy_text
+        !iv_msgty     TYPE symsgty DEFAULT c_msgty_s.
+
     METHODS add_exception
       IMPORTING
-        !io_cx     TYPE REF TO cx_root
-        !iv_msgty  TYPE symsgty DEFAULT c_msgty_e.
+        !io_cx    TYPE REF TO cx_root
+        !iv_msgty TYPE symsgty DEFAULT c_msgty_e.
     METHODS add_free_text
       IMPORTING
         !iv_text  TYPE c
@@ -61,7 +68,9 @@ CLASS zcl_bc_applog_facade DEFINITION
       RAISING
         zcx_bc_class_method.
 
-    methods add_String importing !iv_msg type string.
+    methods add_merrdat_f_tab importing !it_merrdat type merrdat_f_tab.
+
+    METHODS add_string IMPORTING !iv_msg TYPE string.
 
     METHODS add_swr
       IMPORTING
@@ -147,7 +156,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_BC_APPLOG_FACADE IMPLEMENTATION.
+CLASS zcl_bc_applog_facade IMPLEMENTATION.
 
 
   METHOD add_bapiret1.
@@ -176,7 +185,7 @@ CLASS ZCL_BC_APPLOG_FACADE IMPLEMENTATION.
                     iv_msgv2    = <ls_br2>-message_v2
                     iv_msgv3    = <ls_br2>-message_v3
                     iv_msgv4    = <ls_br2>-message_v4
-                    iv_cumulate = abap_false ).
+                    iv_cumulate = iv_cumulate ).
     ENDLOOP.
 
   ENDMETHOD. "add_bapiret2
@@ -239,6 +248,18 @@ CLASS ZCL_BC_APPLOG_FACADE IMPLEMENTATION.
 
   ENDMETHOD. "ADD_BDCMSGCOLL
 
+  METHOD add_bcsy_text.
+
+    LOOP AT it_bcsy_text ASSIGNING FIELD-SYMBOL(<ls_bt>).
+
+      add_free_text(
+        iv_text  = <ls_bt>-line
+        iv_msgty = iv_msgty
+      ).
+
+    ENDLOOP.
+
+  ENDMETHOD.
 
   METHOD add_exception.
 
@@ -299,12 +320,18 @@ CLASS ZCL_BC_APPLOG_FACADE IMPLEMENTATION.
           ).
         ENDIF.
 
-        CHECK ir_tab IS NOT INITIAL.
+        IF ir_tab IS INITIAL.
+          RETURN.
+        ENDIF.
+
         ASSIGN ir_tab->* TO <lt_itab>.
 
-        CHECK
+        IF NOT (
           <lt_itab> IS ASSIGNED AND
-          <lt_itab>[] IS NOT INITIAL.
+          <lt_itab>[] IS NOT INITIAL
+        ).
+          RETURN.
+        ENDIF.
 
         LOOP AT <lt_itab> ASSIGNING FIELD-SYMBOL(<ls_itab>).
 
@@ -332,12 +359,30 @@ CLASS ZCL_BC_APPLOG_FACADE IMPLEMENTATION.
 
   ENDMETHOD.
 
-  method add_string.
+  method add_merrdat_f_tab.
+
+    loop at it_merrdat assigning field-symbol(<ls_merrdat>).
+
+      add_t100_msg(
+        iv_msgid = <ls_merrdat>-msgid
+        iv_msgno = <ls_merrdat>-msgno
+        iv_msgty = <ls_merrdat>-msgty
+        iv_msgv1 = <ls_merrdat>-msgv1
+        iv_msgv2 = <ls_merrdat>-msgv2
+        iv_msgv3 = <ls_merrdat>-msgv3
+        iv_msgv4 = <ls_merrdat>-msgv4
+      ).
+
+    endloop.
+
+  endmethod.
+
+  METHOD add_string.
 
     DATA:
-        lt_br2  type bapiret2_t,
-        lt_ret  TYPE TABLE OF char50,
-        lv_cmsg(9999).
+      lt_br2        TYPE bapiret2_t,
+      lt_ret        TYPE TABLE OF char50,
+      lv_cmsg(9999).
 
     lv_cmsg = iv_msg.
 
@@ -354,7 +399,7 @@ CLASS ZCL_BC_APPLOG_FACADE IMPLEMENTATION.
         out_lines           = lt_ret
       EXCEPTIONS
         outputlen_too_large = 1
-        OTHERS              = 2.
+        OTHERS              = 2. "#EC NUMBER_OK
     IF sy-subrc <> 0.
       RETURN.
     ENDIF.
@@ -381,7 +426,7 @@ CLASS ZCL_BC_APPLOG_FACADE IMPLEMENTATION.
 
     add_bapiret2( lt_br2 ).
 
-  endmethod.
+  ENDMETHOD.
 
 
   METHOD add_swr.
@@ -606,7 +651,9 @@ CLASS ZCL_BC_APPLOG_FACADE IMPLEMENTATION.
                       low    = c_msgty_s ) TO ls_msg_filter-msgty.
     ENDIF.
 
-    CHECK ls_msg_filter-msgty[] IS NOT INITIAL.
+    IF ls_msg_filter-msgty IS INITIAL.
+      RETURN.
+    ENDIF.
 
     CALL FUNCTION 'BAL_GLB_SEARCH_MSG'
       EXPORTING
@@ -617,7 +664,9 @@ CLASS ZCL_BC_APPLOG_FACADE IMPLEMENTATION.
       EXCEPTIONS
         msg_not_found  = 1.
 
-    CHECK sy-subrc IS INITIAL.
+    IF sy-subrc IS NOT INITIAL.
+      RETURN.
+    ENDIF.
 
     LOOP AT lt_msg_handle ASSIGNING FIELD-SYMBOL(<ls_msg_handle>).
 

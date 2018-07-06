@@ -100,8 +100,11 @@ CLASS ZCL_BC_TABLE_FIELD IMPLEMENTATION.
 
       IF ls_multiton-obj->gs_def-rollname IS NOT INITIAL.
 
-        ls_multiton-obj->go_data_element = zcl_bc_data_element=>get_instance(
-          ls_multiton-obj->gs_def-rollname
+        ls_multiton-obj->go_data_element = cast zcl_bc_data_element(
+          zcl_bc_multiton=>get_obj(
+            iv_clsname  = zcl_bc_data_element=>c_clsname_me
+            iv_objectid = conv #( ls_multiton-obj->gs_def-rollname )
+          )
         ).
 
       ENDIF.

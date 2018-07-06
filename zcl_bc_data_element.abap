@@ -1,21 +1,21 @@
 CLASS zcl_bc_data_element DEFINITION
   PUBLIC
   FINAL
-  CREATE PRIVATE .
+  CREATE PUBLIC .
 
   PUBLIC SECTION.
+
+    INTERFACES:
+      zif_bc_multiton.
+
+    CONSTANTS:
+      c_clsname_me TYPE seoclsname VALUE 'ZCL_BC_DATA_ELEMENT'.
 
     DATA:
       gs_def TYPE dd04l READ-ONLY,
       gs_txt TYPE dd04t READ-ONLY.
 
     CLASS-METHODS:
-
-      get_instance
-        IMPORTING !iv_rollname   TYPE rollname
-        RETURNING VALUE(ro_dtel) TYPE REF TO zcl_bc_data_element
-        RAISING   zcx_bc_table_content,
-
       get_shortest_text_safe
         IMPORTING !iv_rollname   TYPE rollname
         RETURNING VALUE(rv_text) TYPE ddtext,
@@ -25,6 +25,10 @@ CLASS zcl_bc_data_element DEFINITION
         RETURNING VALUE(rv_text) TYPE ddtext.
 
     METHODS:
+
+      constructor
+        IMPORTING !iv_rollname   TYPE rollname
+        RAISING   zcx_bc_table_content,
 
       get_domain
         RETURNING VALUE(ro_domain) TYPE REF TO zcl_bc_abap_domain
@@ -83,65 +87,44 @@ ENDCLASS.
 
 CLASS zcl_bc_data_element IMPLEMENTATION.
 
+  METHOD constructor.
 
-  METHOD get_domain.
-    ro_domain = zcl_bc_abap_domain=>get_instance( gs_def-domname ).
-  ENDMETHOD.
+    SELECT SINGLE *
+      INTO @gs_def
+      FROM dd04l
+      WHERE rollname EQ @iv_rollname
+      ##WARN_OK.
 
+    IF sy-subrc NE 0.
+      RAISE EXCEPTION TYPE zcx_bc_table_content
+        EXPORTING
+          textid   = zcx_bc_table_content=>entry_missing
+          objectid = CONV #( iv_rollname )
+          tabname  = c_tabname_main.
+    ENDIF.
 
-  METHOD get_instance.
-
-    ASSIGN gt_multiton[
-      KEY primary_key
-      COMPONENTS rollname = iv_rollname
-    ] TO FIELD-SYMBOL(<ls_multiton>).
+    SELECT SINGLE *
+      INTO @gs_txt
+      FROM dd04t
+      WHERE
+        rollname   EQ @iv_rollname AND
+        ddlanguage EQ @sy-langu
+      ##WARN_OK.
 
     IF sy-subrc NE 0.
 
-      DATA(ls_multiton) = VALUE t_multiton( rollname = iv_rollname ).
-
-      ls_multiton-obj = NEW #( ).
-
       SELECT SINGLE *
-        INTO @ls_multiton-obj->gs_def
-        FROM dd04l
-        WHERE rollname EQ @ls_multiton-rollname
-        ##WARN_OK.
-
-      IF sy-subrc NE 0.
-        RAISE EXCEPTION TYPE zcx_bc_table_content
-          EXPORTING
-            textid   = zcx_bc_table_content=>entry_missing
-            objectid = CONV #( ls_multiton-rollname )
-            tabname  = c_tabname_main.
-      ENDIF.
-
-      SELECT SINGLE *
-        INTO @ls_multiton-obj->gs_txt
+        INTO @gs_txt
         FROM dd04t
-        WHERE
-          rollname   EQ @ls_multiton-rollname AND
-          ddlanguage EQ @sy-langu
+        WHERE rollname EQ @iv_rollname
         ##WARN_OK.
-
-      IF sy-subrc NE 0.
-
-        SELECT SINGLE *
-          INTO @ls_multiton-obj->gs_txt
-          FROM dd04t
-          WHERE rollname EQ @ls_multiton-rollname
-          ##WARN_OK.
-
-      ENDIF.
-
-      INSERT ls_multiton
-        INTO TABLE gt_multiton
-        ASSIGNING <ls_multiton>.
 
     ENDIF.
 
-    ro_dtel = <ls_multiton>-obj.
+  ENDMETHOD.
 
+  METHOD get_domain.
+    ro_domain = zcl_bc_abap_domain=>get_instance( gs_def-domname ).
   ENDMETHOD.
 
   METHOD get_shortest_text.
@@ -190,7 +173,12 @@ CLASS zcl_bc_data_element IMPLEMENTATION.
   METHOD get_shortest_text_safe.
 
     TRY.
-        rv_text = zcl_bc_data_element=>get_instance( iv_rollname )->get_shortest_text( ).
+        rv_Text = cast zcl_bc_data_element(
+            zcl_bc_multiton=>get_obj(
+              iv_clsname  = zcl_bc_data_element=>c_clsname_me
+              iv_objectid = conv #( iv_rollname )
+            )
+          )->get_shortest_Text( ).
       CATCH cx_root.
         rv_text = iv_rollname.
     ENDTRY.
@@ -200,7 +188,14 @@ CLASS zcl_bc_data_element IMPLEMENTATION.
   METHOD get_text_safe.
 
     TRY.
-        rv_text = zcl_bc_data_element=>get_instance( iv_rollname )->get_text( ).
+
+        rv_Text = cast zcl_bc_data_element(
+            zcl_bc_multiton=>get_obj(
+              iv_clsname  = zcl_bc_data_element=>c_clsname_me
+              iv_objectid = conv #( iv_rollname )
+            )
+          )->get_Text( ).
+
       CATCH cx_root.
         rv_text = iv_rollname.
     ENDTRY.
@@ -211,4 +206,21 @@ CLASS zcl_bc_data_element IMPLEMENTATION.
   METHOD validate_value.
     get_domain( )->validate_value( iv_value ).
   ENDMETHOD.
+
+  method zif_bc_multiton~get_instance.
+
+    try.
+        ro_obj ?= new zcl_bc_data_element( conv #( iv_objectid ) ).
+      catch cx_root into datA(lo_Diaper).
+
+        raise exception type cx_sy_create_object_error
+          EXPORTING
+            textid    = cx_sy_create_object_error=>cx_sy_create_object_error
+            previous  = lo_Diaper
+            classname = conv #( c_clsname_me ).
+
+    endtry.
+
+  endmethod.
+
 ENDCLASS.

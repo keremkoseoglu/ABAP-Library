@@ -99,6 +99,7 @@ CLASS zcl_bc_transport_request DEFINITION
     CONSTANTS c_object_dtel TYPE e071-object VALUE 'DTEL' ##NO_TEXT.
     CONSTANTS c_object_tabd TYPE e071-object VALUE 'TABD' ##NO_TEXT.
     CONSTANTS c_object_tabl TYPE e071-object VALUE 'TABL' ##NO_TEXT.
+    CONSTANTS c_object_tdat TYPE e071-object VALUE 'TDAT' ##NO_TEXT.
     CONSTANTS c_object_intf TYPE e071-object VALUE 'INTF' ##NO_TEXT.
     CONSTANTS c_object_meth TYPE e071-object VALUE 'METH' ##NO_TEXT.
     CONSTANTS c_object_prog TYPE e071-object VALUE 'PROG' ##NO_TEXT.
@@ -317,11 +318,6 @@ CLASS zcl_bc_transport_request DEFINITION
         zcx_bc_table_content.
 
     METHODS sort_and_compress RAISING zcx_bc_tr_sort_and_compress.
-
-
-
-
-
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -386,12 +382,11 @@ CLASS zcl_bc_transport_request DEFINITION
         RAISING
           zcx_bc_function_subrc
           zcx_bc_table_content.
-
 ENDCLASS.
 
 
 
-CLASS zcl_bc_transport_request IMPLEMENTATION.
+CLASS ZCL_BC_TRANSPORT_REQUEST IMPLEMENTATION.
 
 
   METHOD add_objects.
@@ -507,6 +502,7 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD complete_shi_piece_list.
 
     TRY.
@@ -567,6 +563,7 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
+
 
   METHOD create_new_request.
 
@@ -1449,6 +1446,7 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD has_locked_object.
 
     SELECT SINGLE lockflag
@@ -1674,6 +1672,7 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD sort_and_compress.
 
     TRY.
@@ -1702,5 +1701,4 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
-
 ENDCLASS.

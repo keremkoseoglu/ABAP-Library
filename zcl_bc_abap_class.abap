@@ -50,7 +50,8 @@ CLASS zcl_bc_abap_class DEFINITION
       tt_dok_text TYPE STANDARD TABLE OF t_dok_text WITH DEFAULT KEY.
 
     CONSTANTS:
-      c_cmptype_method TYPE seocmptype VALUE '1'.
+      c_cmptype_method   TYPE seocmptype VALUE '1',
+      c_meth_constructor TYPE seocpdname VALUE 'CONSTRUCTOR'.
 
     DATA:
       gs_def       TYPE seoclass READ-ONLY.
@@ -69,8 +70,8 @@ CLASS zcl_bc_abap_class DEFINITION
           zcx_bc_table_content,
 
       convert_prgname_to_clsname
-        importing !iv_prgname type clike
-        returning value(rv_clsname) type seoclsname,
+        IMPORTING !iv_prgname       TYPE clike
+        RETURNING VALUE(rv_clsname) TYPE seoclsname,
 
       get_instance
         IMPORTING !iv_clsname   TYPE seoclsname
@@ -85,7 +86,7 @@ CLASS zcl_bc_abap_class DEFINITION
 
       dequeue_exec,
 
-      enqueue_exec raising zcx_bc_lock,
+      enqueue_exec RAISING zcx_bc_lock,
 
       get_components
         IMPORTING
@@ -99,6 +100,8 @@ CLASS zcl_bc_abap_class DEFINITION
       get_instanceable_subclasses RETURNING VALUE(rt_clsname) TYPE tt_clsname,
       get_recursive_subclass_names RETURNING VALUE(rt_clsname) TYPE tt_clsname,
       get_text RETURNING VALUE(rs_txt) TYPE seoclasstx,
+
+      is_in_call_stack RETURNING VALUE(rv_stack) TYPE abap_bool,
 
       search_class_doc
         IMPORTING !it_word      TYPE tt_dok_text
@@ -155,7 +158,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
+CLASS zcl_bc_abap_class IMPLEMENTATION.
 
 
   METHOD accept.
@@ -182,10 +185,10 @@ CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
   ENDMETHOD.
 
 
-  method convert_prgname_to_clsname.
+  METHOD convert_prgname_to_clsname.
     rv_clsname = iv_prgname+0(30).
-    replace all occurrences of '=' in rv_clsname with space.
-  endmethod.
+    REPLACE ALL OCCURRENCES OF '=' IN rv_clsname WITH space.
+  ENDMETHOD.
 
 
   METHOD dequeue_exec.
@@ -263,7 +266,7 @@ CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
       SELECT clsname
         INTO CORRESPONDING FIELDS OF TABLE gt_immed_subcls_nam
         FROM seometarel
-        WHERE refclsname EQ gs_def-clsname.
+        WHERE refclsname EQ gs_def-clsname.             "#EC CI_GENBUFF
 
       gv_immed_subcls_nam_read = abap_true.
     ENDIF.
@@ -314,7 +317,9 @@ CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
       gv_insta_subcls_nam_read = abap_true.
 
       gt_insta_subcls_nam = get_recursive_subclass_names( ).
-      CHECK gt_insta_subcls_nam IS NOT INITIAL.
+      IF gt_insta_subcls_nam IS INITIAL.
+        RETURN.
+      ENDIF.
 
       DATA(lt_clsname_rng) = VALUE tt_clsname_rng(
         FOR ls_cn IN gt_insta_subcls_nam (
@@ -329,14 +334,14 @@ CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
         FROM seoclassdf AS sd1
         WHERE
           clsname IN @lt_clsname_rng AND
-          version gt 0 and
+          version GT 0 AND
           version EQ (
             SELECT MAX( version )
             FROM seoclassdf AS sd2
             WHERE clsname EQ sd1~clsname
           ) AND
           clsabstrct EQ @abap_true
-        ORDER BY clsname.
+        ORDER BY clsname.                              "#EC CI_BUFFSUBQ
 
       LOOP AT gt_insta_subcls_nam ASSIGNING FIELD-SYMBOL(<ls_clsname>).
 
@@ -392,7 +397,9 @@ CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
         ) TO gt_recur_subcls_nam.
     ENDLOOP.
 
-    CHECK iv_rec EQ abap_false.
+    IF iv_rec EQ abap_true.
+      RETURN.
+    ENDIF.
 
     SORT gt_recur_subcls_nam BY clsname.
     DELETE ADJACENT DUPLICATES FROM gt_recur_subcls_nam COMPARING clsname.
@@ -418,7 +425,7 @@ CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
           INTO @gs_txt
           FROM seoclasstx
           WHERE clsname EQ @gs_def-clsname
-          ##WARN_OK .
+          ##WARN_OK .                                   "#EC CI_NOORDER
       ENDIF.
 
       gv_txt_read = abap_true.
@@ -428,6 +435,28 @@ CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD is_in_call_stack.
+
+    DATA lt_cs TYPE sys_callst.
+
+    CALL FUNCTION 'SYSTEM_CALLSTACK'
+      IMPORTING
+        et_callstack = lt_cs.
+
+    ASSERT lt_cs IS NOT INITIAL. " Can't be
+
+    DATA(lv_progname_pattern) = |{ gs_def-clsname }*|.
+
+    LOOP AT lt_cs
+      TRANSPORTING NO FIELDS
+      WHERE progname CP lv_progname_pattern.
+
+      rv_stack = abap_true.
+      RETURN.
+
+    ENDLOOP.
+
+  ENDMETHOD.
 
   METHOD read_dokil.
 
@@ -440,13 +469,17 @@ CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
       langu  EQ @sy-langu AND
       typ    EQ @c_doku_typ_class.
 
-    CHECK sy-subrc NE 0.
+    IF sy-subrc NE 0.
+      RETURN.
+    ENDIF.
 
     SELECT SINGLE * INTO @gs_dokil FROM dokil WHERE
       id     EQ @c_doku_id_class AND
       object EQ @gs_def-clsname AND
       typ    EQ @c_doku_typ_class
       ##WARN_OK.
+                                                        "#EC CI_GENBUFF
+                                                        "#EC CI_NOORDER
 
   ENDMETHOD.
 
@@ -458,7 +491,9 @@ CLASS ZCL_BC_ABAP_CLASS IMPLEMENTATION.
     CHECK it_word IS NOT INITIAL.
 
     read_dokil( ).
-    CHECK gs_dokil IS NOT INITIAL.
+    IF gs_dokil IS INITIAL.
+      RETURN.
+    ENDIF.
 
     LOOP AT it_word ASSIGNING FIELD-SYMBOL(<ls_word>).
 

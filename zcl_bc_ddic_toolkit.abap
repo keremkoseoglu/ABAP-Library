@@ -16,6 +16,7 @@ public section.
   constants C_OPTION_EQ type DDOPTION value 'EQ' ##NO_TEXT.
   constants C_OPTION_GE type DDOPTION value 'GE' ##NO_TEXT.
   constants C_OPTION_LE type DDOPTION value 'LE' ##NO_TEXT.
+  constants C_OPTION_NE type DDOPTION value 'NE' ##NO_TEXT.
   constants C_ROLLNAME_OPTION type ROLLNAME value 'DDOPTION' ##NO_TEXT.
   constants C_ROLLNAME_SIGN type ROLLNAME value 'DDSIGN' ##NO_TEXT.
   constants C_SIGN_E type DDSIGN value 'E' ##NO_TEXT.
@@ -115,6 +116,7 @@ public section.
       !IV_DOMVALUE type DD07V-DOMVALUE_L
     returning
       value(RV_DDTEXT) type DD07V-DDTEXT .
+
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -464,4 +466,5 @@ CLASS ZCL_BC_DDIC_TOOLKIT IMPLEMENTATION.
         output       = rv_vbeln.
 
   ENDMETHOD.
+
 ENDCLASS.

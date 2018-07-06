@@ -20,6 +20,13 @@ CLASS zcl_mm_vendor DEFINITION
         RAISING   zcx_bc_table_content.
 
     CLASS-METHODS:
+      cache_itab_multiton
+        IMPORTING
+          !ir_itab        TYPE REF TO data
+          !iv_fnam_vendor TYPE fieldname DEFAULT c_fnam_vendor
+        RAISING
+          zcx_bc_method_parameter,
+
       cache_itab_with_adrc_data
         IMPORTING
           !ir_itab         TYPE REF TO data
@@ -38,10 +45,10 @@ CLASS zcl_mm_vendor DEFINITION
 
       get_default_acc_grp_vals
         IMPORTING
-          !iv_bukrs       TYPE bukrs
-          !iv_ktokk       TYPE ktokk
+          !iv_bukrs     TYPE bukrs
+          !iv_ktokk     TYPE ktokk
         RETURNING
-          VALUE(rs_def)   TYPE ZFIT_XK_DZAHLS
+          VALUE(rs_def) TYPE zfit_xk_dzahls
         RAISING
           zcx_bc_table_content,
 
@@ -67,7 +74,7 @@ CLASS zcl_mm_vendor DEFINITION
       tt_company_code_data TYPE HASHED TABLE OF t_company_code_data
         WITH UNIQUE KEY primary_key COMPONENTS bukrs,
 
-      tt_def_acc_grp_Val
+      tt_def_acc_grp_val
         TYPE HASHED TABLE OF zfit_xk_dzahls
         WITH UNIQUE KEY primary_key COMPONENTS bukrs ktokk,
 
@@ -110,6 +117,7 @@ CLASS zcl_mm_vendor DEFINITION
 
     CONSTANTS:
       c_clsname_me            TYPE seoclsname VALUE 'ZCL_MM_VENDOR',
+      c_meth_cim              type seocpdname value 'CACHE_ITAB_MULTITON',
       c_meth_ciwccd           TYPE seocpdname VALUE 'CACHE_ITAB_WITH_COMP_CODE_DATA',
       c_tabname_company_data  TYPE tabname    VALUE 'LFB1',
       c_tabname_def           TYPE tabname    VALUE 'LFA1',
@@ -120,7 +128,7 @@ CLASS zcl_mm_vendor DEFINITION
       gt_company_code_data TYPE tt_company_code_data.
 
     CLASS-DATA:
-      gt_def_acc_grp_val TYPE tt_def_acc_Grp_Val,
+      gt_def_acc_grp_val TYPE tt_def_acc_grp_val,
       gt_lfa1            TYPE HASHED TABLE OF lfa1 WITH UNIQUE KEY primary_key COMPONENTS lifnr,
       gt_mt              TYPE tt_mt.
 
@@ -345,6 +353,52 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
       ENDLOOP.
 
     ENDIF.
+
+  ENDMETHOD.
+
+  METHOD cache_itab_multiton.
+
+    DATA lt_lfa1_key TYPE tt_lfa1_key.
+
+    FIELD-SYMBOLS:
+      <lt_itab>  TYPE ANY TABLE,
+      <lv_lifnr> TYPE lfa1-lifnr.
+
+    CHECK ir_itab IS NOT INITIAL.
+    ASSIGN ir_itab->* TO <lt_itab>.
+    CHECK <lt_itab> IS NOT INITIAL.
+
+    LOOP AT <lt_itab> ASSIGNING FIELD-SYMBOL(<ls_itab>).
+
+      ASSIGN COMPONENT iv_fnam_vendor OF STRUCTURE <ls_itab> TO <lv_lifnr>.
+
+      IF <lv_lifnr> IS NOT ASSIGNED.
+        RAISE EXCEPTION TYPE zcx_bc_method_parameter
+          EXPORTING
+            textid      = zcx_bc_method_parameter=>param_value_invalid
+            class_name  = c_clsname_me
+            method_name = c_meth_cim
+            param_name  = CONV #( iv_fnam_vendor ).
+      ENDIF.
+
+      CHECK NOT line_exists(
+        gt_mt[
+          KEY primary_key COMPONENTS
+          lifnr = <lv_lifnr>
+        ]
+      ).
+
+      APPEND VALUE #( lifnr = <lv_lifnr> ) TO lt_lfa1_key.
+
+    ENDLOOP.
+
+    IF lt_lfa1_key IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SORT lt_lfa1_key.
+    DELETE ADJACENT DUPLICATES FROM lt_lfa1_key.
+    create_and_cache_multiton( lt_lfa1_key ).
 
   ENDMETHOD.
 

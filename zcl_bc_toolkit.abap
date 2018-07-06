@@ -66,6 +66,9 @@ public section.
       !IV_OBJECT type THEAD-TDOBJECT optional
     changing
       !CV_TEXT type ANY .
+
+  class-methods leave_dangerous_program.
+
   PROTECTED SECTION.
 private section.
 
@@ -271,4 +274,10 @@ CLASS ZCL_BC_TOOLKIT IMPLEMENTATION.
         OTHERS             = 3 ##FM_SUBRC_OK.
 
   ENDMETHOD.
+
+  method leave_dangerous_program.
+    message i787(zsd).
+    leave program.
+  endmethod.
+
 ENDCLASS.

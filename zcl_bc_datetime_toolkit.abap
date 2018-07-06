@@ -5,16 +5,21 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
 
   PUBLIC SECTION.
 
-
+    constants:
+      c_default_periv type periv value 'K4'.
 
     CLASS-METHODS:
 
       check_selection_date_limit
         IMPORTING
-          VALUE(iv_tcode)  TYPE sy-tcode
-          VALUE(it_values) TYPE zbctt_date_limit_values
+          !iv_tcode  TYPE sy-tcode
+          !it_values TYPE zbctt_date_limit_values
         RAISING
           zcx_bc_genel ,
+
+      date_to_jahrper
+        importing !iv_Date type dats
+        returning value(rv_jahrper) type JAHRPER,
 
       is_weekday_checked
         importing
@@ -26,7 +31,7 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
       get_date_range_of_date_period
         IMPORTING
           !iv_date        TYPE sydatum DEFAULT sy-datum
-          !iv_periv       TYPE periv DEFAULT 'K4'
+          !iv_periv       TYPE periv   DEFAULT c_default_periv
         RETURNING
           VALUE(rt_range) TYPE date_t_range
         RAISING
@@ -35,6 +40,15 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
       get_day_in_week
         IMPORTING !iv_date      TYPE sydatum
         RETURNING VALUE(rv_day) TYPE i,
+
+      get_hours_between_times
+        importing
+          !iv_from_date   type sydatum
+          !iv_from_time   type syuzeit
+          !iv_to_Date     type sydatum
+          !iv_to_time     type syuzeit
+        returning
+          value(rv_hours) type i,
 
       get_last_day_of_period
         IMPORTING
@@ -65,7 +79,23 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
       previous_month_last_day
         EXPORTING
           !ev_last_month TYPE postper_kk
-          !ev_last_day   TYPE datum .
+          !ev_last_day   TYPE datum ,
+
+      subtract_Days_from_month_end
+        importing
+          !iv_jahrper    type jahrper
+          !iv_days       type i
+        returning
+          value(rv_date) type dats
+        raising
+          zcx_bc_function_subrc,
+
+      subtract_month_from_jahrper
+        importing
+          !iv_jahrper type jahrper
+          !iv_month   type i
+        returning
+          value(rv_jahrper) type jahrper.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -99,6 +129,9 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
         type hashed table of t_fwd_Cache
         with unique key primary_key components datum calid.
 
+    constants:
+      c_seconds_per_hour type i value 3600.
+
     CLASS-DATA:
       gt_diw_cache      TYPE tt_diw_cache,
       gt_fwd_cache      type tt_Fwd_cache,
@@ -119,16 +152,20 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
 
 
   METHOD check_selection_date_limit.
+
     "--------->> written by mehmet sertkaya 20.01.2017 14:52:44
-    CHECK iv_tcode  IS NOT INITIAL.
-    CHECK it_values IS NOT INITIAL.
+    CHECK
+      iv_tcode  IS NOT INITIAL and
+      it_values IS NOT INITIAL.
 
     SELECT * INTO TABLE @DATA(lt_limit) FROM zbct_date_limit
        FOR ALL ENTRIES IN @it_values
        WHERE tcode EQ @iv_tcode AND
              field EQ @it_values-field.
 
-    CHECK sy-subrc EQ 0.
+    if sy-subrc NE 0.
+      return.
+    endif.
 
     SELECT SINGLE pgmna INTO @DATA(lv_repid) FROM tstc
        WHERE tcode EQ @iv_tcode.
@@ -168,6 +205,9 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
+  method date_to_jahrper.
+    rv_jahrper = |{ iv_date+0(4) }0{ iv_date+4(2) }|.
+  endmethod.
 
   METHOD get_date_range_of_date_period.
 
@@ -260,6 +300,22 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
     rv_day = <ls_diw>-day.
 
   ENDMETHOD.
+
+  method get_hours_between_times.
+
+      cl_abap_tstmp=>td_subtract(
+        EXPORTING
+          date1    = iv_to_date
+          time1    = iv_to_time
+          date2    = iv_from_date
+          time2    = iv_from_time
+        IMPORTING
+          res_secs = rv_hours
+      ).
+
+      DIVIDE rv_hours BY c_seconds_per_hour.
+
+  endmethod.
 
 
   METHOD get_last_day_of_period.
@@ -569,4 +625,51 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
     ENDIF.
 
   ENDMETHOD.
+
+  method subtract_Days_From_month_end.
+
+    data(lv_year)  = iv_jahrper+0(4).
+    data(lv_month) = conv T009B-POPER( iv_jahrper+5(2) ).
+
+    call function 'LAST_DAY_IN_PERIOD_GET'
+      EXPORTING
+        i_gjahr        = lv_year
+        i_periv        = c_default_periv
+        i_poper        = lv_month
+      IMPORTING
+        e_date         = rv_date
+      EXCEPTIONS
+        input_false    = 1
+        t009_notfound  = 2
+        t009b_notfound = 3
+        others         = 4
+      ##FM_SUBRC_OK.
+
+    zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'LAST_DAY_IN_PERIOD_GET' ).
+
+    subtract iv_days from rv_date.
+
+  endmethod.
+
+  method subtract_month_from_jahrper.
+
+    data:
+      lv_year  type numc4,
+      lv_month type numc2.
+
+    lv_year  = iv_jahrper+0(4).
+    lv_month = iv_jahrper+5(2).
+
+    do iv_month times.
+      subtract 1 from lv_month.
+      if lv_month is initial.
+        subtract 1 from lv_year.
+        lv_month = 12.
+      endif.
+    enddo.
+
+    rv_jahrper = |{ lv_year }0{ lv_month }|.
+
+  endmethod.
+
 ENDCLASS.

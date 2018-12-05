@@ -133,7 +133,7 @@ CLASS zcl_bc_transport_request DEFINITION
         VALUE(rv_as4text) TYPE as4text .
     CLASS-METHODS get_empty_open_requests
       IMPORTING
-        !it_trkorr_rng TYPE ZBCTT_TRKORR_RNG
+        !it_trkorr_rng TYPE zbctt_trkorr_rng
       RETURNING
         VALUE(rt_list) TYPE zbctt_trkorr_det
       RAISING
@@ -176,7 +176,7 @@ CLASS zcl_bc_transport_request DEFINITION
         VALUE(rt_object) TYPE tt_request_and_object .
     CLASS-METHODS get_request_objects
       IMPORTING
-        !it_trkorr_rng TYPE ZBCTT_TRKORR_RNG
+        !it_trkorr_rng TYPE zbctt_trkorr_rng
         !it_pgmid_rng  TYPE tt_pgmid_rng OPTIONAL
       EXPORTING
         !et_list       TYPE zcl_bc_dol_model=>tt_dol_list
@@ -327,10 +327,12 @@ CLASS zcl_bc_transport_request DEFINITION
 
       BEGIN OF t_clazy_flag,
         class_related_obj_tags TYPE abap_bool,
+        dev_req_rng            TYPE abap_bool,
       END OF t_clazy_flag,
 
       BEGIN OF t_clazy_val,
         class_related_obj_tag TYPE tt_request_object_type,
+        dev_req_rng           TYPE zbctt_trkorr_rng,
       END OF t_clazy_val,
 
       BEGIN OF t_lazy_flag,
@@ -355,7 +357,17 @@ CLASS zcl_bc_transport_request DEFINITION
         obj_name TYPE e071-obj_name,
       END OF t_obj_name,
 
-      tt_obj_name TYPE STANDARD TABLE OF t_obj_name WITH DEFAULT KEY.
+      tt_obj_name TYPE STANDARD TABLE OF t_obj_name WITH DEFAULT KEY,
+
+      BEGIN OF t_multiton,
+        trkorr TYPE trkorr,
+        top    type abap_bool,
+        obj    TYPE REF TO zcl_bc_transport_request,
+      END OF t_multiton,
+
+      tt_multiton
+        TYPE HASHED TABLE OF t_multiton
+        WITH UNIQUE KEY primary_key COMPONENTS trkorr top.
 
     CONSTANTS:
       c_tabname_e070         TYPE tabname VALUE 'E070',
@@ -363,11 +375,15 @@ CLASS zcl_bc_transport_request DEFINITION
 
     CLASS-DATA:
       gs_clazy_flag TYPE t_clazy_flag,
-      gs_clazy_val  TYPE t_clazy_val.
+      gs_clazy_val  TYPE t_clazy_val,
+      gt_multiton   TYPE tt_multiton.
 
     DATA:
       gs_lazy_flag TYPE t_lazy_flag,
       gs_lazy_val  TYPE t_lazy_val.
+
+    CLASS-METHODS:
+      build_dev_req_rng.
 
     CLASS-METHODS:
       release_single
@@ -386,7 +402,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_BC_TRANSPORT_REQUEST IMPLEMENTATION.
+CLASS zcl_bc_transport_request IMPLEMENTATION.
 
 
   METHOD add_objects.
@@ -502,6 +518,19 @@ CLASS ZCL_BC_TRANSPORT_REQUEST IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD build_dev_req_rng.
+
+    CHECK gs_clazy_flag-dev_req_rng IS INITIAL.
+
+    gs_clazy_val-dev_req_rng = VALUE #( (
+      sign   = zcl_bc_ddic_toolkit=>c_sign_i
+      option = zcl_bc_ddic_toolkit=>c_option_cp
+      low    = |{ zcl_bc_sap_system=>c_sysid_dev }K*|
+    ) ).
+
+    gs_clazy_flag-dev_req_rng = abap_true.
+
+  ENDMETHOD.
 
   METHOD complete_shi_piece_list.
 
@@ -831,29 +860,46 @@ CLASS ZCL_BC_TRANSPORT_REQUEST IMPLEMENTATION.
 
   METHOD get_instance.
 
-    SELECT SINGLE trkorr, strkorr
-      INTO @DATA(ls_e070)
-      FROM e070
-      WHERE trkorr EQ @iv_trkorr.
+    ASSIGN gt_multiton[
+        KEY primary_key COMPONENTS
+        trkorr = iv_trkorr
+        top    = iv_top
+      ] TO FIELD-SYMBOL(<ls_mt>).
 
     IF sy-subrc NE 0.
 
-      RAISE EXCEPTION TYPE zcx_bc_table_content
-        EXPORTING
-          textid   = zcx_bc_table_content=>entry_missing
-          objectid = CONV #( iv_trkorr )
-          tabname  = c_tabname_e070.
+      DATA(ls_mt) = VALUE t_multiton(
+        trkorr = iv_trkorr
+        top    = iv_top
+      ).
+
+      SELECT SINGLE trkorr, strkorr
+        INTO @DATA(ls_e070)
+        FROM e070
+        WHERE trkorr EQ @iv_trkorr.
+
+      IF sy-subrc NE 0.
+        RAISE EXCEPTION TYPE zcx_bc_table_content
+          EXPORTING
+            textid   = zcx_bc_table_content=>entry_missing
+            objectid = CONV #( iv_trkorr )
+            tabname  = c_tabname_e070.
+      ENDIF.
+
+      ls_mt-obj = NEW #( ).
+      ls_mt-obj->gv_trkorr = SWITCH #( iv_top
+        WHEN abap_false THEN ls_e070-trkorr
+        WHEN abap_true THEN COND #(
+          WHEN ls_e070-strkorr IS NOT INITIAL THEN ls_e070-strkorr
+          ELSE ls_e070-trkorr
+        )
+      ).
+
+      INSERT ls_mt INTO TABLE gt_multiton ASSIGNING <ls_mt>.
 
     ENDIF.
 
-    ro_obj = NEW #( ).
-    ro_obj->gv_trkorr = SWITCH #( iv_top
-      WHEN abap_false THEN ls_e070-trkorr
-      WHEN abap_true THEN COND #(
-        WHEN ls_e070-strkorr IS NOT INITIAL THEN ls_e070-strkorr
-        ELSE ls_e070-trkorr
-      )
-    ).
+    ro_obj = <ls_mt>-obj.
 
   ENDMETHOD.
 
@@ -1030,12 +1076,15 @@ CLASS ZCL_BC_TRANSPORT_REQUEST IMPLEMENTATION.
     " Elimizdeki nesne listesiyle, bu nesnelerin geçtiği Request'leri bul
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
+    build_dev_req_rng( ).
+
     SELECT
         trkorr, pgmid, object, obj_name
       INTO TABLE @DATA(lt_e071)
       FROM e071
       FOR ALL ENTRIES IN @it_obj
       WHERE
+        trkorr   IN @gs_clazy_val-dev_req_rng AND
         pgmid    EQ @it_obj-pgmid AND
         object   EQ @it_obj-object AND
         obj_name EQ @it_obj-obj_name.
@@ -1075,7 +1124,13 @@ CLASS ZCL_BC_TRANSPORT_REQUEST IMPLEMENTATION.
             trkorr, pgmid, object, obj_name
           APPENDING CORRESPONDING FIELDS OF TABLE @lt_e071
           FROM e071
-          WHERE obj_name IN @lt_obj_name_rng. "#EC CI_NOFIRST
+          WHERE
+            trkorr   IN @gs_clazy_val-dev_req_rng AND
+            (
+              pgmid EQ @zif_bc_dol_obj=>c_pgmid_r3tr OR
+              pgmid EQ @zif_bc_dol_obj=>c_pgmid_limu
+            ) AND
+            obj_name IN @lt_obj_name_rng.               "#EC CI_NOFIRST
 
       ENDIF.
 

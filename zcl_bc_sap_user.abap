@@ -61,11 +61,18 @@ CLASS zcl_bc_sap_user DEFINITION
 
       get_full_name    RETURNING VALUE(rv_name) TYPE full_name,
 
+      get_mobile_number
+        importing !iv_tolerate_missing_number type abap_bool default abap_true
+        returning value(rv_mobile) type AD_TLNMBR
+        raising   ZCX_BC_USER_MASTER_DATA,
+
       get_pwd_chg_date
         IMPORTING !iv_force_fresh TYPE abap_bool
         RETURNING VALUE(rv_date)  TYPE xubcdat,
 
       get_uname_text   RETURNING VALUE(rv_utext) TYPE ad_namtext,
+
+      is_dialog_user returning value(rv_dialog) type abap_bool,
 
       set_pwd_chg_date
         IMPORTING !iv_pwdchgdate TYPE usr02-pwdchgdate
@@ -80,6 +87,7 @@ CLASS zcl_bc_sap_user DEFINITION
       BEGIN OF t_lazy_flag,
         email      type abap_bool,
         full_name  TYPE abap_bool,
+        mobile     type abap_bool,
         pwdchgdate TYPE abap_bool,
         uname_text TYPE abap_bool,
       END OF t_lazy_flag,
@@ -87,6 +95,7 @@ CLASS zcl_bc_sap_user DEFINITION
       BEGIN OF t_lazy_var,
         email      type AD_SMTPADR,
         full_name  TYPE full_name,
+        mobile     type AD_TLNMBR,
         pwdchgdate TYPE xubcdat,
         uname_text TYPE name_text,
       END OF t_lazy_var,
@@ -100,12 +109,16 @@ CLASS zcl_bc_sap_user DEFINITION
         TYPE HASHED TABLE OF t_multiton
         WITH UNIQUE KEY primary_key COMPONENTS bname.
 
+    constants:
+      c_ustyp_dialog type usr02-ustyp value 'A'.
+
     CLASS-DATA:
       gt_multiton TYPE tt_multiton.
 
     DATA:
       gs_lazy_flag TYPE t_lazy_flag,
-      gs_lazy_var  TYPE t_lazy_var.
+      gs_lazy_var  TYPE t_lazy_var,
+      gs_usr02     type usr02.
 
     CLASS-METHODS:
 
@@ -126,11 +139,11 @@ CLASS ZCL_BC_SAP_USER IMPLEMENTATION.
   method check_pwdchgdate_auth.
 
     AUTHORITY-CHECK OBJECT 'ZBCAOPDC' ID 'ACTVT' field iv_actvt.
-    check sy-subrc ne 0.
-
+    if sy-subrc ne 0.
     raise exception type zcx_bc_authorization
       EXPORTING
         textid    = zcx_Bc_Authorization=>no_auth.
+    endif.
 
   endmethod.
 
@@ -214,7 +227,7 @@ CLASS ZCL_BC_SAP_USER IMPLEMENTATION.
         INTO @gs_lazy_var-full_name
         FROM adrp
         WHERE persnumber EQ ( SELECT persnumber FROM usr21 WHERE bname = @gv_bname )
-        ##WARN_OK.
+        ##WARN_OK. "#EC CI_NOORDER
 
       gs_lazy_flag-full_name = abap_true.
     ENDIF.
@@ -245,8 +258,8 @@ CLASS ZCL_BC_SAP_USER IMPLEMENTATION.
 
       DATA(ls_multiton) = VALUE t_multiton( bname = iv_bname ).
 
-      SELECT SINGLE gltgv, gltgb
-        INTO @DATA(ls_usr02)
+      SELECT SINGLE *
+        INTO @data(ls_usr02)
         FROM usr02
         WHERE bname EQ @ls_multiton-bname.
 
@@ -269,6 +282,7 @@ CLASS ZCL_BC_SAP_USER IMPLEMENTATION.
 
       ls_multiton-obj = NEW #( ).
       ls_multiton-obj->gv_bname = ls_multiton-bname.
+      ls_multiton-obj->gs_usr02 = ls_usr02.
 
       INSERT ls_multiton INTO TABLE gt_multiton ASSIGNING <ls_multiton>.
 
@@ -277,6 +291,41 @@ CLASS ZCL_BC_SAP_USER IMPLEMENTATION.
     ro_obj = <ls_multiton>-obj.
 
   ENDMETHOD.
+
+  method get_mobile_number.
+
+    if gs_lazy_flag-mobile eq abap_False.
+
+      select single adr2~tel_number
+        from
+          usr21
+          inner join adr2 on
+            adr2~addrnumber eq usr21~addrnumber and
+            adr2~persnumber eq usr21~persnumber
+        where
+          usr21~bname      eq @gv_bname and
+          adr2~date_from  le @sy-datum and
+          adr2~tel_number ne @space
+        into @gs_lazy_var-mobile.
+        "#EC CI_NOORDER
+
+      gs_lazy_flag-mobile = abap_true.
+
+    endif.
+
+    if gs_lazy_var-mobile is initial and
+       iv_tolerate_missing_number eq abap_false.
+
+      raise exception type zcx_bc_user_master_data
+        EXPORTING
+          textid   = ZCX_BC_USER_MASTER_DATA=>mobile_missing
+          uname    = gv_bname.
+
+    endif.
+
+    rv_mobile = gs_lazy_var-mobile.
+
+  endmethod.
 
 
   METHOD get_pwd_chg_date.
@@ -307,7 +356,7 @@ CLASS ZCL_BC_SAP_USER IMPLEMENTATION.
         INTO @gs_lazy_var-uname_text
         FROM user_addr
         WHERE bname EQ @gv_bname
-        ##WARN_OK.
+        ##WARN_OK.  "#EC CI_NOORDER
 
       gs_lazy_flag-uname_text = abap_true.
     ENDIF.
@@ -316,6 +365,9 @@ CLASS ZCL_BC_SAP_USER IMPLEMENTATION.
 
   ENDMETHOD.
 
+  method is_dialog_user.
+    rv_dialog = xsdbool( gs_usr02-ustyp = c_ustyp_dialog ).
+  endmethod.
 
   METHOD set_pwd_chg_date.
 
@@ -338,6 +390,8 @@ CLASS ZCL_BC_SAP_USER IMPLEMENTATION.
     UPDATE usr02
       SET pwdchgdate = @iv_pwdchgdate
       WHERE bname EQ @gv_bname.
+
+    gs_usr02-pwdchgdate = iv_pwdchgdate.
 
     dequeue_user( gv_bname ).
 

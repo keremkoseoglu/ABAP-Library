@@ -17,11 +17,20 @@ CLASS zcl_bc_abap_table DEFINITION
       tt_tabfld       TYPE STANDARD TABLE OF t_tabfld WITH DEFAULT KEY,
       tt_tabfld_fsort TYPE SORTED TABLE OF t_tabfld WITH UNIQUE KEY primary_key COMPONENTS fieldname,
 
-      begin of t_Tabname,
-        tabname type tabname,
-      end of t_tabname,
+      BEGIN OF t_tabname,
+        tabname TYPE tabname,
+      END OF t_tabname,
 
-      tt_tabname type standard table of t_Tabname with default key.
+      tt_tabname     TYPE STANDARD TABLE OF t_tabname WITH DEFAULT KEY,
+
+      tt_tabname_rng TYPE RANGE OF tabname,
+
+      BEGIN OF t_fldroll,
+        fieldname TYPE dd03l-fieldname,
+        rollname  TYPE dd03l-rollname,
+      END OF t_fldroll,
+
+      tt_fldroll TYPE STANDARD TABLE OF t_fldroll WITH DEFAULT KEY.
 
     DATA gs_def TYPE dd02l READ-ONLY.
 
@@ -45,66 +54,77 @@ CLASS zcl_bc_abap_table DEFINITION
         RAISING
           zcx_bc_table_content ,
 
-      get_Tables_containing_dtel
-        importing !iv_rollname type rollname
-        returning value(rt_Tabname) type tt_Tabname.
+      get_tables_containing_dtel
+        IMPORTING !iv_rollname      TYPE rollname
+        RETURNING VALUE(rt_tabname) TYPE tt_tabname,
+
+      get_tables_containing_fldroll
+        IMPORTING
+          !it_tabname_rng   TYPE tt_tabname_rng
+          !it_fldroll       TYPE tt_fldroll
+        RETURNING
+          VALUE(rt_tabname) TYPE tt_tabname.
 
     METHODS:
-      check_Table_Has_flds_of_tab
-        importing !iv_tabname type tabname
-        raising   zcx_bc_table_content,
+      check_table_has_flds_of_tab
+        IMPORTING !iv_tabname TYPE tabname
+        RAISING   zcx_bc_table_content,
 
 
-      check_Table_has_field
-        importing !iv_fieldname type fieldname
-        raising   zcx_bc_table_content,
+      check_table_has_field
+        IMPORTING !iv_fieldname TYPE fieldname
+        RAISING   zcx_bc_table_content,
 
       enqueue
-        importing !iv_key TYPE clike OPTIONAL
+        IMPORTING !iv_key TYPE clike OPTIONAL
         RAISING   cx_rs_foreign_lock ,
 
       get_field
-        importing !iv_fnam type fieldname
-        returning value(rs_dd03l) type dd03l
-        raising   zcx_bc_table_content,
+        IMPORTING !iv_fnam        TYPE fieldname
+        RETURNING VALUE(rs_dd03l) TYPE dd03l
+        RAISING   zcx_bc_table_content,
 
-      get_Fields RETURNING VALUE(rt_dd03l) TYPE tt_dd03l,
+      get_fields RETURNING VALUE(rt_dd03l) TYPE tt_dd03l,
 
-      get_included_Tables
-        importing !iv_Recursive type abap_bool
-        returning value(rt_tabname) type tt_Tabname,
+      get_included_tables
+        IMPORTING !iv_recursive     TYPE abap_bool
+        RETURNING VALUE(rt_tabname) TYPE tt_tabname,
 
       get_key_fields
-        importing !iv_with_mandt type abap_bool default abap_true
+        IMPORTING !iv_with_mandt  TYPE abap_bool DEFAULT abap_true
         RETURNING VALUE(rt_dd03l) TYPE tt_dd03l,
 
       get_rollname_of_field
-        importing !iv_fnam type fieldname
-        returning value(rv_roll) type rollname
-        raising   zcx_bc_table_content.
+        IMPORTING !iv_fnam       TYPE fieldname
+        RETURNING VALUE(rv_roll) TYPE rollname
+        RAISING   zcx_bc_table_content,
+
+      is_field_key
+        IMPORTING !iv_fnam      TYPE fieldname
+        RETURNING VALUE(rv_key) TYPE abap_bool.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
 
     TYPES:
-      begin of t_dtel_tab,
-        rollname type rollname,
-        tabname  type tt_tabname,
-      end of t_dtel_Tab,
+      BEGIN OF t_dtel_tab,
+        rollname TYPE rollname,
+        tabname  TYPE tt_tabname,
+      END OF t_dtel_tab,
 
-      tt_dtel_Tab
-        type hashed table of t_dtel_Tab
-        with unique key primary_key components rollname,
+      tt_dtel_tab
+        TYPE HASHED TABLE OF t_dtel_tab
+        WITH UNIQUE KEY primary_key COMPONENTS rollname,
 
       BEGIN OF t_lazy_flag,
         field   TYPE abap_bool,
-        include type abap_bool,
+        include TYPE abap_bool,
         key     TYPE abap_bool,
       END OF t_lazy_flag,
 
       BEGIN OF t_lazy_val,
         field   TYPE tt_dd03l,
-        include type tt_tabname,
+        include TYPE tt_tabname,
         key     TYPE tt_dd03l,
       END OF t_lazy_val,
 
@@ -129,12 +149,12 @@ CLASS zcl_bc_abap_table DEFINITION
       tt_rollname TYPE STANDARD TABLE OF t_rollname.
 
     CONSTANTS:
-      c_fnam_mandt  type fieldname value 'MANDT',
+      c_fnam_mandt  TYPE fieldname VALUE 'MANDT',
       c_tabname_def TYPE tabname   VALUE 'DD02L',
-      c_tabname_fld type tabname   value 'DD03L'.
+      c_tabname_fld TYPE tabname   VALUE 'DD03L'.
 
     CLASS-DATA:
-      gt_dtel_Tab type tt_dtel_Tab,
+      gt_dtel_tab TYPE tt_dtel_tab,
       gt_mt       TYPE tt_mt.
 
     DATA gs_lazy TYPE t_lazy.
@@ -148,32 +168,32 @@ ENDCLASS.
 
 
 
-CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
+CLASS zcl_bc_abap_table IMPLEMENTATION.
 
 
-  method check_Table_has_field.
+  METHOD check_table_has_field.
     read_fields_lazy( ).
-    check not line_exists( gs_lazy-val-field[ fieldname = iv_fieldname ] ).
+    IF NOT line_exists( gs_lazy-val-field[ fieldname = iv_fieldname ] ).
+      RAISE EXCEPTION TYPE zcx_bc_table_content
+        EXPORTING
+          objectid = |{ gs_def-tabname } - { iv_fieldname }|
+          tabname  = gs_def-tabname
+          textid   = zcx_bc_table_content=>entry_missing.
+    ENDIF.
 
-    RAISE EXCEPTION TYPE zcx_bc_table_content
-      EXPORTING
-        objectid = |{ gs_def-tabname } - { iv_fieldname }|
-        tabname  = gs_def-tabname
-        textid   = zcx_bc_table_content=>entry_missing.
-
-  endmethod.
+  ENDMETHOD.
 
 
-  method check_Table_Has_flds_of_tab.
+  METHOD check_table_has_flds_of_tab.
 
-    loop at get_instance( iv_tabname )->get_fields( ) assigning field-symbol(<ls_fld>).
+    LOOP AT get_instance( iv_tabname )->get_fields( ) ASSIGNING FIELD-SYMBOL(<ls_fld>).
       check_table_has_field( <ls_fld>-fieldname ).
-    endloop.
+    ENDLOOP.
 
-  endmethod.
+  ENDMETHOD.
 
 
-  method enqueue.
+  METHOD enqueue.
 
     CALL FUNCTION 'VIEW_ENQUEUE'
       EXPORTING
@@ -187,17 +207,17 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
         table_not_found      = 6
         OTHERS               = 7.
 
-    CHECK  sy-subrc NE 0.
+    IF sy-subrc NE 0.
+      RAISE EXCEPTION TYPE cx_rs_foreign_lock
+        EXPORTING
+          key      = CONV #( iv_key )
+          object   = CONV #( gs_def-tabname )
+          previous = zcx_bc_symsg=>get_instance( )
+          textid   = cx_rs_foreign_lock=>cx_rs_foreign_lock
+          user     = CONV #( sy-msgv1 ).
+    ENDIF.
 
-    RAISE EXCEPTION TYPE cx_rs_foreign_lock
-      EXPORTING
-        key      = CONV #( iv_key )
-        object   = CONV #( gs_def-tabname )
-        previous = zcx_bc_symsg=>get_instance( )
-        textid   = cx_rs_foreign_lock=>cx_rs_foreign_lock
-        user     = CONV #( sy-msgv1 ).
-
-  endmethod.
+  ENDMETHOD.
 
 
   METHOD get_dbfield_text.
@@ -205,32 +225,32 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
   ENDMETHOD.
 
 
-  method get_field.
+  METHOD get_field.
     read_fields_lazy( ).
 
-    try.
+    TRY.
         rs_dd03l = gs_lazy-val-field[ fieldname = iv_fnam ].
-      catch cx_root into data(lo_diaper).
+      CATCH cx_root INTO DATA(lo_diaper).
 
         RAISE EXCEPTION TYPE zcx_bc_table_content
           EXPORTING
             textid   = zcx_bc_table_content=>entry_missing
             objectid = |{ gs_def-tabname } { iv_fnam }|
-            previous = lo_Diaper
+            previous = lo_diaper
             tabname  = c_tabname_fld.
 
-    endtry.
+    ENDTRY.
 
-  endmethod.
+  ENDMETHOD.
 
 
-  method get_Fields.
+  METHOD get_fields.
     read_fields_lazy( ).
     rt_dd03l = gs_lazy-val-field.
-  endmethod.
+  ENDMETHOD.
 
 
-  method get_included_Tables.
+  METHOD get_included_tables.
 
 
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -238,31 +258,31 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
     read_includes_lazy( ).
-    data(lt_return) = gs_lazy-val-include.
+    DATA(lt_return) = gs_lazy-val-include.
 
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     " İstendiyse, Recursive diğer Include'lar
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-    if iv_recursive eq abap_true.
+    IF iv_recursive EQ abap_true.
 
-      loop at gs_lazy-val-include assigning field-symbol(<ls_include>).
+      LOOP AT gs_lazy-val-include ASSIGNING FIELD-SYMBOL(<ls_include>).
 
-        try.
-            data(lo_tab) = zcl_bc_abap_Table=>get_instance( <ls_include>-tabname ).
-          catch cx_root. " Paranoya
-            delete lt_Return where tabname eq <ls_include>-tabname.
-            continue.
-        endtry.
+        TRY.
+            DATA(lo_tab) = zcl_bc_abap_table=>get_instance( <ls_include>-tabname ).
+          CATCH cx_root. " Paranoya
+            DELETE lt_return WHERE tabname EQ <ls_include>-tabname.
+            CONTINUE.
+        ENDTRY.
 
-        append lines of lo_Tab->get_included_tables( abap_true ) to lt_return.
+        APPEND LINES OF lo_tab->get_included_tables( abap_true ) TO lt_return.
 
-      endloop.
+      ENDLOOP.
 
-      sort lt_return by tabname.
-      delete adjacent duplicates from lt_Return comparing tabname.
+      SORT lt_return BY tabname.
+      DELETE ADJACENT DUPLICATES FROM lt_return COMPARING tabname.
 
-    endif.
+    ENDIF.
 
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     " Değerleri döndür
@@ -270,7 +290,7 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
 
     rt_tabname = lt_return.
 
-  endmethod.
+  ENDMETHOD.
 
 
   METHOD get_instance.
@@ -285,7 +305,7 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
 
       SELECT SINGLE * INTO @ls_mt-obj->gs_def
         FROM dd02l
-        WHERE tabname EQ @ls_mt-tabname.
+        WHERE tabname EQ @ls_mt-tabname.                "#EC CI_NOORDER
 
       IF sy-subrc NE 0.
         RAISE EXCEPTION TYPE zcx_bc_table_content
@@ -308,16 +328,16 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
     read_keys_lazy( ).
     rt_dd03l = gs_lazy-val-key.
 
-    if iv_with_mandt eq abap_false.
-      delete rt_dd03l where fieldname eq c_fnam_mandt.
-    endif.
+    IF iv_with_mandt EQ abap_false.
+      DELETE rt_dd03l WHERE fieldname EQ c_fnam_mandt.
+    ENDIF.
 
   ENDMETHOD.
 
 
-  method get_rollname_of_field.
-    rv_roll = get_Field( iv_fnam )-rollname.
-  endmethod.
+  METHOD get_rollname_of_field.
+    rv_roll = get_field( iv_fnam )-rollname.
+  ENDMETHOD.
 
 
   METHOD get_rollname_pairs.
@@ -331,19 +351,21 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
       ls_ret   LIKE LINE OF rt_ret.
 
 *   Tablo alanlarını al
-    lt_tab1 = corresponding #( get_instance( iv_Tabname1 )->get_fields( ) ).
-    lt_tab2 = corresponding #( get_instance( iv_tabname2 )->get_fields( ) ).
+    lt_tab1 = CORRESPONDING #( get_instance( iv_tabname1 )->get_fields( ) ).
+    lt_tab2 = CORRESPONDING #( get_instance( iv_tabname2 )->get_fields( ) ).
 
 *   Tekrarsız Domain listesi oluştur
-    LOOP AT lt_tab1 ASSIGNING FIELD-SYMBOL(<ls_tab1>) WHERE rollname IS NOT INITIAL.
+    LOOP AT lt_tab1 ASSIGNING FIELD-SYMBOL(<ls_tab1>) WHERE rollname IS NOT INITIAL. "#EC CI_SORTSEQ
       COLLECT VALUE t_rollname( rollname = <ls_tab1>-rollname ) INTO lt_roll.
     ENDLOOP.
 
-    LOOP AT lt_tab2 ASSIGNING FIELD-SYMBOL(<ls_tab2>) WHERE rollname IS NOT INITIAL.
+    LOOP AT lt_tab2 ASSIGNING FIELD-SYMBOL(<ls_tab2>) WHERE rollname IS NOT INITIAL. "#EC CI_SORTSEQ
       COLLECT VALUE t_rollname( rollname = <ls_tab2>-rollname ) INTO lt_roll.
     ENDLOOP.
 
-    CHECK lt_roll[] IS NOT INITIAL.
+    IF lt_roll[] IS INITIAL.
+      RETURN.
+    ENDIF.
 
 *   Domain metinlerini oku
     SELECT * INTO TABLE lt_dd04t
@@ -373,7 +395,7 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
       LOOP AT lt_tab1
         ASSIGNING <ls_tab1>
         USING KEY primary_key
-        WHERE rollname EQ <ls_roll>-rollname.
+        WHERE rollname EQ <ls_roll>-rollname.           "#EC CI_SORTSEQ
 
         ls_ret-tabname1   = <ls_tab1>-tabname.
         ls_ret-fieldname1 = <ls_tab1>-fieldname.
@@ -381,7 +403,7 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
         LOOP AT lt_tab2
           ASSIGNING <ls_tab2>
           USING KEY primary_key
-          WHERE rollname EQ <ls_roll>-rollname.
+          WHERE rollname EQ <ls_roll>-rollname.         "#EC CI_SORTSEQ
 
           ls_ret-tabname2   = <ls_tab2>-tabname.
           ls_ret-fieldname2 = <ls_tab2>-fieldname.
@@ -400,36 +422,96 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
   ENDMETHOD.
 
 
-  method get_Tables_containing_dtel.
+  METHOD get_tables_containing_dtel.
 
-    assign gt_dtel_Tab[
+    ASSIGN gt_dtel_tab[
       rollname = iv_rollname
-    ] to field-symbol(<ls_dtel_Tab>).
+    ] TO FIELD-SYMBOL(<ls_dtel_tab>).
 
-    if sy-subrc ne 0.
+    IF sy-subrc NE 0.
 
-      data(ls_new) = value t_dtel_Tab( rollname = iv_rollname ).
+      DATA(ls_new) = VALUE t_dtel_tab( rollname = iv_rollname ).
 
-      select distinct dd03l~tabname
-        into corresponding fields of table @ls_new-tabname
-        from dd03l
-             inner join dd02l on dd02l~tabname eq dd03l~tabname
-        where rollname eq @ls_new-rollname and
-              dd02l~tabclass ne 'INTTAB' and
-              dd02l~tabclass ne 'VIEW' and
-              dd02l~tabclass ne 'APPEND'.
+      SELECT DISTINCT dd03l~tabname
+        INTO CORRESPONDING FIELDS OF TABLE @ls_new-tabname
+        FROM dd03l
+             INNER JOIN dd02l ON dd02l~tabname EQ dd03l~tabname
+        WHERE rollname EQ @ls_new-rollname AND
+              dd02l~tabclass NE 'INTTAB' AND
+              dd02l~tabclass NE 'VIEW' AND
+              dd02l~tabclass NE 'APPEND'.
 
-      sort ls_new-tabname by tabname.
-      delete adjacent duplicates from ls_new-tabname comparing tabname.
+      SORT ls_new-tabname BY tabname.
+      DELETE ADJACENT DUPLICATES FROM ls_new-tabname COMPARING tabname.
 
-      insert ls_new into table gt_dtel_Tab assigning <ls_dtel_tab>.
+      INSERT ls_new INTO TABLE gt_dtel_tab ASSIGNING <ls_dtel_tab>.
 
-    endif.
+    ENDIF.
 
-    rt_tabname = <ls_dtel_Tab>-tabname.
+    rt_tabname = <ls_dtel_tab>-tabname.
 
-  endmethod.
+  ENDMETHOD.
 
+  METHOD get_tables_containing_fldroll.
+
+    CHECK it_fldroll IS NOT INITIAL.
+
+    SELECT tabname, fieldname, rollname
+      FROM dd03l
+      FOR ALL ENTRIES IN @it_fldroll
+      WHERE
+        tabname   IN @it_tabname_rng       AND
+        fieldname EQ @it_fldroll-fieldname AND
+        rollname  EQ @it_fldroll-rollname
+      INTO TABLE @DATA(lt_dd03l).
+
+    rt_tabname = VALUE #(
+      FOR GROUPS _tabname OF _dd03l IN lt_dd03l
+      GROUP BY _dd03l-tabname
+      ( tabname = _tabname )
+    ).
+
+    SORT lt_dd03l BY tabname fieldname rollname. " Binary Search var
+
+    LOOP AT rt_tabname ASSIGNING FIELD-SYMBOL(<ls_tabname>).
+
+      DATA(lv_table_ok) = abap_true.
+
+      LOOP AT it_fldroll ASSIGNING FIELD-SYMBOL(<ls_fldroll>).
+
+        READ TABLE lt_dd03l
+          TRANSPORTING NO FIELDS
+          WITH KEY
+            tabname   = <ls_tabname>-tabname
+            fieldname = <ls_fldroll>-fieldname
+            rollname  = <ls_fldroll>-rollname
+          BINARY SEARCH.
+
+        CHECK sy-subrc NE 0.
+        lv_table_ok = abap_false.
+        EXIT.
+
+      ENDLOOP.
+
+      CHECK lv_table_ok EQ abap_false.
+      DELETE rt_tabname.
+      CONTINUE.
+
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD is_field_key.
+
+    read_keys_lazy( ).
+
+    rv_key = xsdbool(
+      line_exists(
+        gs_lazy-val-key[ fieldname = iv_fnam ]
+      )
+    ).
+
+  ENDMETHOD.
 
   METHOD read_fields_lazy.
 
@@ -437,7 +519,7 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
 
     SELECT * INTO TABLE @gs_lazy-val-field
       FROM dd03l
-      WHERE tabname EQ @gs_def-tabname and
+      WHERE tabname EQ @gs_def-tabname AND
             fieldname NOT LIKE '.%'.
 
     gs_lazy-flag-field = abap_true.
@@ -445,19 +527,19 @@ CLASS ZCL_BC_ABAP_TABLE IMPLEMENTATION.
   ENDMETHOD.
 
 
-  method read_includes_lazy.
+  METHOD read_includes_lazy.
 
-    check gs_lazy-flag-include is initial.
+    CHECK gs_lazy-flag-include IS INITIAL.
 
-    select precfield as tabname
-      into corresponding fields of table @gs_lazy-val-include
-      from dd03l
-      where tabname   eq @gs_Def-tabname and
-            fieldname eq '.INCLUDE'.
+    SELECT precfield AS tabname
+      INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-include
+      FROM dd03l
+      WHERE tabname   EQ @gs_def-tabname AND
+            fieldname EQ '.INCLUDE'.
 
     gs_lazy-flag-include = abap_true.
 
-  endmethod.
+  ENDMETHOD.
 
 
   METHOD read_keys_lazy.

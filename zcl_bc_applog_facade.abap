@@ -17,6 +17,7 @@ CLASS zcl_bc_applog_facade DEFINITION
     CONSTANTS c_sign_i TYPE ddsign VALUE 'I' ##NO_TEXT.
     CONSTANTS c_sever_all TYPE zbcd_sever VALUE '' ##NO_TEXT.
     CONSTANTS c_sever_error TYPE zbcd_sever VALUE 'E' ##NO_TEXT.
+    CONSTANTS c_sever_lock TYPE zbcd_sever VALUE 'L'.
     CONSTANTS c_sever_warning TYPE zbcd_sever VALUE 'W' ##NO_TEXT.
     DATA gv_object TYPE balobj_d .
     DATA gv_subobject TYPE balsubobj .
@@ -68,7 +69,7 @@ CLASS zcl_bc_applog_facade DEFINITION
       RAISING
         zcx_bc_class_method.
 
-    methods add_merrdat_f_tab importing !it_merrdat type merrdat_f_tab.
+    METHODS add_merrdat_f_tab IMPORTING !it_merrdat TYPE merrdat_f_tab.
 
     METHODS add_string IMPORTING !iv_msg TYPE string.
 
@@ -178,14 +179,32 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
   METHOD add_bapiret2.
 
     LOOP AT it_bapiret2 ASSIGNING FIELD-SYMBOL(<ls_br2>).
-      add_t100_msg( iv_msgid    = <ls_br2>-id
-                    iv_msgno    = <ls_br2>-number
-                    iv_msgty    = <ls_br2>-type
-                    iv_msgv1    = <ls_br2>-message_v1
-                    iv_msgv2    = <ls_br2>-message_v2
-                    iv_msgv3    = <ls_br2>-message_v3
-                    iv_msgv4    = <ls_br2>-message_v4
-                    iv_cumulate = iv_cumulate ).
+
+      IF <ls_br2>-id IS INITIAL AND
+         <ls_br2>-message IS NOT INITIAL.
+
+        add_free_text(
+            iv_text  = <ls_br2>-message
+            iv_msgty = COND #( WHEN <ls_br2>-type IS NOT INITIAL
+                               THEN <ls_br2>-type
+                               ELSE c_msgty_s )
+        ).
+
+      ELSE.
+
+        add_t100_msg(
+          iv_msgid    = <ls_br2>-id
+          iv_msgno    = <ls_br2>-number
+          iv_msgty    = <ls_br2>-type
+          iv_msgv1    = <ls_br2>-message_v1
+          iv_msgv2    = <ls_br2>-message_v2
+          iv_msgv3    = <ls_br2>-message_v3
+          iv_msgv4    = <ls_br2>-message_v4
+          iv_cumulate = iv_cumulate
+        ).
+
+      ENDIF.
+
     ENDLOOP.
 
   ENDMETHOD. "add_bapiret2
@@ -359,9 +378,9 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
 
   ENDMETHOD.
 
-  method add_merrdat_f_tab.
+  METHOD add_merrdat_f_tab.
 
-    loop at it_merrdat assigning field-symbol(<ls_merrdat>).
+    LOOP AT it_merrdat ASSIGNING FIELD-SYMBOL(<ls_merrdat>).
 
       add_t100_msg(
         iv_msgid = <ls_merrdat>-msgid
@@ -373,9 +392,9 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
         iv_msgv4 = <ls_merrdat>-msgv4
       ).
 
-    endloop.
+    ENDLOOP.
 
-  endmethod.
+  ENDMETHOD.
 
   METHOD add_string.
 

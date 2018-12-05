@@ -14,8 +14,6 @@ CLASS zcl_bc_as4text_toolkit DEFINITION
     TYPES:
       tt_gekod TYPE STANDARD TABLE OF t_gekod WITH DEFAULT KEY .
 
-    CONSTANTS c_sample_valid_as4text TYPE as4text VALUE 'VOL-12345 - Madde aciklamasi' ##NO_TEXT.
-
     CLASS-METHODS build_as4text_from_gekod_list
       IMPORTING
         !it_gekod         TYPE tt_gekod
@@ -46,9 +44,12 @@ CLASS zcl_bc_as4text_toolkit DEFINITION
     CLASS-METHODS purify_as4text
       CHANGING
         !cv_as4text TYPE as4text .
+
+    CLASS-METHODS get_sample_valid_as4text RETURNING VALUE(rv_text) TYPE as4text.
+
     CLASS-METHODS user_has_free_format_tr_auth
       IMPORTING
-        !iv_background TYPE abap_bool optional
+        !iv_background TYPE abap_bool OPTIONAL
       RETURNING
         VALUE(rv_has)  TYPE abap_bool .
     CLASS-METHODS validate_as4text_jira
@@ -83,7 +84,6 @@ CLASS zcl_bc_as4text_toolkit DEFINITION
         WITH UNIQUE KEY primary_key COMPONENTS trkorr.
 
     CONSTANTS:
-      c_as4pfx        TYPE as4text  VALUE 'VOL',
       c_option_cp     TYPE ddoption VALUE 'CP',
       c_separ         TYPE char1    VALUE '-',
       c_sign_i        TYPE ddsign   VALUE 'I',
@@ -135,8 +135,9 @@ CLASS zcl_bc_as4text_toolkit IMPLEMENTATION.
 
     ENDCASE.
 
-    CHECK rv_as4text IS INITIAL.
-    rv_as4text = iv_default.
+    IF rv_as4text IS INITIAL.
+      rv_as4text = iv_default.
+    ENDIF.
 
   ENDMETHOD.
 
@@ -169,15 +170,21 @@ CLASS zcl_bc_as4text_toolkit IMPLEMENTATION.
 
     CHECK gt_gekod_regex IS INITIAL.
 
-    gt_gekod_regex = VALUE #(
-      ( value = 'VOL-[0-9]' )
-      ( value = 'VOL-[0-9][0-9]' )
-      ( value = 'VOL-[0-9][0-9][0-9]' )
-      ( value = 'VOL-[0-9][0-9][0-9][0-9]' )
-      ( value = 'VOL-[0-9][0-9][0-9][0-9][0-9]' )
-      ( value = 'VOL-[0-9][0-9][0-9][0-9][0-9][0-9]' )
-      ( value = 'VOL-[0-9][0-9][0-9][0-9][0-9][0-9][0-9]' )
-    ).
+    LOOP AT zcl_bc_jira_project=>get_integrable_projects( ) ASSIGNING FIELD-SYMBOL(<ls_proj>).
+
+      APPEND LINES OF VALUE tt_string(
+        ( value = |{ <ls_proj>-project_key }-[0-9]| )
+        ( value = |{ <ls_proj>-project_key }-[0-9][0-9]| )
+        ( value = |{ <ls_proj>-project_key }-[0-9][0-9][0-9]| )
+        ( value = |{ <ls_proj>-project_key }-[0-9][0-9][0-9][0-9]| )
+        ( value = |{ <ls_proj>-project_key }-[0-9][0-9][0-9][0-9][0-9]| )
+        ( value = |{ <ls_proj>-project_key }-[0-9][0-9][0-9][0-9][0-9][0-9]| )
+        ( value = |{ <ls_proj>-project_key }-[0-9][0-9][0-9][0-9][0-9][0-9][0-9]| )
+      ) TO gt_gekod_regex.
+
+    ENDLOOP.
+
+    ASSERT gt_gekod_regex IS NOT INITIAL.
 
   ENDMETHOD.
 
@@ -185,6 +192,8 @@ CLASS zcl_bc_as4text_toolkit IMPLEMENTATION.
   METHOD extract_gekod_from_as4text.
 
     DATA lt_split TYPE STANDARD TABLE OF as4text.
+
+    CLEAR: ev_gekod, ev_gesum.
 
     IF iv_validate_as4text EQ abap_true.
       validate_as4text_jira(
@@ -200,7 +209,7 @@ CLASS zcl_bc_as4text_toolkit IMPLEMENTATION.
       CASE sy-tabix.
         WHEN 1.
 
-          IF <lv_split>+0(3) NE c_as4pfx.
+          IF zcl_bc_jira_project=>is_proj_integrable( <lv_split>+0(3) ) EQ abap_false.
             EXIT.
           ENDIF.
 
@@ -276,6 +285,10 @@ CLASS zcl_bc_as4text_toolkit IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD get_sample_valid_as4text.
+    rv_text = |{ zcl_bc_jira_project=>get_default_integrable_proj( ) }-12345 - Madde aciklamasi|.
+  ENDMETHOD.
+
 
   METHOD purify_as4text.
 
@@ -283,9 +296,9 @@ CLASS zcl_bc_as4text_toolkit IMPLEMENTATION.
       lv_gesum_pure TYPE as4text,
       lv_prev_space TYPE abap_bool.
 
-    TRY.
+    CHECK cv_as4text IS NOT INITIAL.
 
-        CHECK cv_as4text IS NOT INITIAL.
+    TRY.
 
         extract_gekod_from_as4text(
           EXPORTING
@@ -423,7 +436,9 @@ CLASS zcl_bc_as4text_toolkit IMPLEMENTATION.
     ENDTRY.
 
     IF iv_valid_if_auth EQ abap_true.
-      CHECK user_has_free_format_tr_auth( ) EQ abap_false.
+      IF user_has_free_format_tr_auth( ) EQ abap_true.
+        RETURN.
+      ENDIF.
     ENDIF.
 
     RAISE EXCEPTION TYPE zcx_bc_data_format

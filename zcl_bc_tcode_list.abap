@@ -39,8 +39,7 @@ CLASS zcl_bc_tcode_list DEFINITION
 
            tt_trans    TYPE STANDARD TABLE OF t_trans WITH DEFAULT KEY.
 
-    CONSTANTS: c_har(3)      VALUE 'VOL',
-               c_object_tran TYPE trobjtype VALUE 'TRAN',
+    CONSTANTS: c_object_tran TYPE trobjtype VALUE 'TRAN',
                c_pgmid_r3tr  TYPE pgmid     VALUE 'R3TR'.
 
     DATA: gt_ret   TYPE tt_tcode_list,
@@ -101,7 +100,7 @@ CLASS ZCL_BC_TCODE_LIST IMPLEMENTATION.
          tadir~devclass IN gs_param-devclass_rng AND
          tdevc~tpclass IN gs_param-tpclass_rng
        ORDER BY tstc~tcode
-       ##TOO_MANY_ITAB_FIELDS.
+       ##TOO_MANY_ITAB_FIELDS. "#EC CI_BUFFJOIN
 
   ENDMETHOD.
 
@@ -168,7 +167,10 @@ CLASS ZCL_BC_TCODE_LIST IMPLEMENTATION.
 
     DATA lt_split TYPE STANDARD TABLE OF string.
 
-    CHECK is_trans-as4text IS NOT INITIAL AND is_trans-as4text+0(3) EQ c_har.
+    CHECK
+      is_trans-as4text IS NOT INITIAL AND
+      zcl_bc_jira_project=>is_proj_integrable( is_trans-as4text+0(3) ) eq abap_True.
+
     cs_ret-trkorr = is_trans-trkorr.
     cs_ret-as4text = is_trans-as4text.
 

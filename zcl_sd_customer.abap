@@ -19,6 +19,13 @@ CLASS zcl_sd_customer DEFINITION
     DATA gs_def TYPE kna1 READ-ONLY.
 
     CLASS-METHODS:
+      cache_kna1
+        IMPORTING
+          !ir_tab  TYPE REF TO data
+          !iv_fnam TYPE fieldname DEFAULT c_fnam_kunnr
+        RAISING
+          zcx_bc_class_method,
+
       cache_name1
         IMPORTING
           !ir_tab  TYPE REF TO data
@@ -39,9 +46,9 @@ CLASS zcl_sd_customer DEFINITION
         RAISING   zcx_bc_table_content,
 
       get_def_tax_codes
-        importing !iv_ktokd type ktokd
-        returning value(rs_val) type ZFIT_XD_DEF_STC_FLD
-        raising   zcx_Bc_Table_content,
+        IMPORTING !iv_ktokd     TYPE ktokd
+        RETURNING VALUE(rs_val) TYPE zfit_xd_def_stc_fld
+        RAISING   zcx_bc_table_content,
 
       get_hq_branch_codes
         IMPORTING
@@ -95,9 +102,9 @@ CLASS zcl_sd_customer DEFINITION
   PRIVATE SECTION.
 
     TYPES:
-      tt_Def_Stc
-        type hashed table of ZFIT_XD_DEF_STC
-        with unique key primary_key components ktokd,
+      tt_def_stc
+        TYPE HASHED TABLE OF zfit_xd_def_stc
+        WITH UNIQUE KEY primary_key COMPONENTS ktokd,
 
       tt_land1_rng TYPE RANGE OF land1,
 
@@ -167,12 +174,12 @@ CLASS zcl_sd_customer DEFINITION
     CONSTANTS:
       c_clsname_me       TYPE seoclsname VALUE 'ZCL_SD_CUSTOMER',
       c_meth_cache_wgbez TYPE seocpdname VALUE 'CACHE_NAME1',
-      c_Tabname_def_stc  type tabname    value 'ZFIT_XD_DEF_STC',
+      c_tabname_def_stc  TYPE tabname    VALUE 'ZFIT_XD_DEF_STC',
       c_tabname_lsd      TYPE tabname    VALUE 'ZFIT_XD_DEF_LSD'.
 
     CLASS-DATA:
       gs_clazy     TYPE t_clazy,
-      gt_def_Stc   type tt_Def_Stc,
+      gt_def_stc   TYPE tt_def_stc,
       gt_hq        TYPE tt_hq,
       gt_kna1      TYPE HASHED TABLE OF kna1 WITH UNIQUE KEY primary_key COMPONENTS kunnr,
       gt_knvv      TYPE tt_knvv,
@@ -188,6 +195,56 @@ ENDCLASS.
 
 CLASS zcl_sd_customer IMPLEMENTATION.
 
+  METHOD cache_kna1.
+
+    DATA:
+      lt_kunnr_rng TYPE range_kunnr_tab.
+
+    FIELD-SYMBOLS:
+      <lt_tab>   TYPE ANY TABLE,
+      <lv_kunnr> TYPE any.
+
+    TRY.
+
+        CHECK ir_tab IS NOT INITIAL.
+        ASSIGN ir_tab->* TO <lt_tab>.
+        CHECK <lt_tab> IS ASSIGNED.
+
+        LOOP AT <lt_tab> ASSIGNING FIELD-SYMBOL(<ls_tab>).
+
+          ASSIGN COMPONENT iv_fnam OF STRUCTURE <ls_tab> TO <lv_kunnr>.
+
+          CHECK <lv_kunnr> IS ASSIGNED AND
+                <lv_kunnr> IS NOT INITIAL AND
+                ( NOT line_exists( gt_kna1[ KEY primary_key COMPONENTS kunnr = <lv_kunnr> ] ) ).
+
+          COLLECT VALUE range_kunnr_wa(
+            option = zcl_bc_ddic_toolkit=>c_option_eq
+            sign   = zcl_bc_ddic_toolkit=>c_sign_i
+            low    = <lv_kunnr>
+          ) INTO lt_kunnr_rng.
+
+        ENDLOOP.
+
+        CHECK lt_kunnr_rng IS NOT INITIAL.
+
+        SELECT *
+          FROM kna1
+          WHERE kunnr IN @lt_kunnr_rng
+          APPENDING CORRESPONDING FIELDS OF TABLE @gt_kna1.
+
+      CATCH cx_root INTO DATA(lo_diaper).
+
+        RAISE EXCEPTION TYPE zcx_bc_class_method
+          EXPORTING
+            textid   = zcx_bc_class_method=>unexpected_error
+            previous = lo_diaper
+            class    = c_clsname_me
+            method   = c_meth_cache_wgbez.
+
+    ENDTRY.
+
+  ENDMETHOD.
 
   METHOD cache_name1.
 
@@ -294,7 +351,7 @@ CLASS zcl_sd_customer IMPLEMENTATION.
         FROM zfit_mrk_sube
         WHERE kunnr EQ @gs_def-kunnr
         INTO CORRESPONDING FIELDS OF TABLE @gt_hq
-        ##TOO_MANY_ITAB_FIELDS. "#EC CI_NOFIRST
+        ##TOO_MANY_ITAB_FIELDS.                         "#EC CI_NOFIRST
 
       IF gt_hq IS INITIAL.
         INSERT INITIAL LINE INTO TABLE gt_hq.
@@ -400,35 +457,35 @@ CLASS zcl_sd_customer IMPLEMENTATION.
 
   ENDMETHOD.
 
-  method get_def_tax_codes.
+  METHOD get_def_tax_codes.
 
-    if gt_def_Stc is initial.
-      select * from ZFIT_XD_DEF_STC into table @gt_Def_Stc. "#EC CI_NOWHERE
-      if gt_def_Stc is initial.
-        insert initial line into table gt_def_Stc.
-      endif.
-    endif.
+    IF gt_def_stc IS INITIAL.
+      SELECT * FROM zfit_xd_def_stc INTO TABLE @gt_def_stc. "#EC CI_NOWHERE
+      IF gt_def_stc IS INITIAL.
+        INSERT INITIAL LINE INTO TABLE gt_def_stc.
+      ENDIF.
+    ENDIF.
 
-    try.
-        rs_val = corresponding #(
-          gt_def_Stc[
-            key primary_key components
+    TRY.
+        rs_val = CORRESPONDING #(
+          gt_def_stc[
+            KEY primary_key COMPONENTS
             ktokd = iv_ktokd
           ]
         ).
 
-      catch cx_sy_itab_line_not_found into data(lo_silnf).
+      CATCH cx_sy_itab_line_not_found INTO DATA(lo_silnf).
 
-        raise exception type zcx_bc_table_content
+        RAISE EXCEPTION TYPE zcx_bc_table_content
           EXPORTING
-            textid    = zcx_bc_table_content=>entry_missing
-            previous  = lo_silnf
-            objectid  = conv #( iv_ktokd )
-            tabname   = c_Tabname_def_stc.
+            textid   = zcx_bc_table_content=>entry_missing
+            previous = lo_silnf
+            objectid = CONV #( iv_ktokd )
+            tabname  = c_tabname_def_stc.
 
-    endtry.
+    ENDTRY.
 
-  endmethod.
+  ENDMETHOD.
 
   METHOD get_hq_branch_codes.
 
@@ -503,12 +560,20 @@ CLASS zcl_sd_customer IMPLEMENTATION.
 
   METHOD get_knvv.
 
-    DATA ls_knvv TYPE knvv.
+    DATA:
+      ls_knvv  TYPE knvv,
+      lv_kunnr TYPE kunnr.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = iv_kunnr
+      IMPORTING
+        output = lv_kunnr.
 
     ASSIGN gt_knvv[
       KEY primary_key
       COMPONENTS
-        kunnr = iv_kunnr
+        kunnr = lv_kunnr
         vkorg = iv_vkorg
         vtweg = iv_vtweg
         spart = iv_spart
@@ -517,12 +582,12 @@ CLASS zcl_sd_customer IMPLEMENTATION.
     IF sy-subrc NE 0.
       CLEAR ls_knvv.
       SELECT SINGLE * FROM knvv INTO ls_knvv
-        WHERE kunnr = iv_kunnr
+        WHERE kunnr = lv_kunnr
           AND vkorg = iv_vkorg
           AND vtweg = iv_vtweg
           AND spart = iv_spart.
 *
-      ls_knvv-kunnr = iv_kunnr.
+      ls_knvv-kunnr = lv_kunnr.
       ls_knvv-vkorg = iv_vkorg.
       ls_knvv-vtweg = iv_vtweg.
       ls_knvv-spart = iv_spart.

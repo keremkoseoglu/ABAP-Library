@@ -10,6 +10,8 @@ CLASS zcl_bc_sap_system DEFINITION
       c_dest_live  TYPE rfcdest VALUE 'TPECLNT100',
       c_dest_qa    TYPE rfcdest VALUE 'TQECLNT100',
 
+      c_domain     type TMSCDOM-DOMNAM value 'DOMAIN_TPE',
+
       c_sysid_dev  TYPE sysysid VALUE 'TDE',
       c_sysid_live TYPE sysysid VALUE 'TPE',
       c_sysid_qa   TYPE sysysid VALUE 'TQE'.

@@ -5,10 +5,17 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
 
   PUBLIC SECTION.
 
-    constants:
-      c_default_periv type periv value 'K4'.
+    CONSTANTS:
+      c_default_periv TYPE periv VALUE 'K4'.
 
     CLASS-METHODS:
+
+      add_minutes_to_date_time
+        IMPORTING
+          !iv_minutes TYPE i
+        CHANGING
+          !cv_date    TYPE dats
+          !cv_time    TYPE tims,
 
       check_selection_date_limit
         IMPORTING
@@ -18,15 +25,15 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
           zcx_bc_genel ,
 
       date_to_jahrper
-        importing !iv_Date type dats
-        returning value(rv_jahrper) type JAHRPER,
+        IMPORTING !iv_date          TYPE dats
+        RETURNING VALUE(rv_jahrper) TYPE jahrper,
 
       is_weekday_checked
-        importing
-          !iv_datum type datum
-          !is_wdays type ZSDS_DAY_CHECKBOX
-        returning
-          value(rv_checked) type abap_bool,
+        IMPORTING
+          !iv_datum         TYPE datum
+          !is_wdays         TYPE zsds_day_checkbox
+        RETURNING
+          VALUE(rv_checked) TYPE abap_bool,
 
       get_date_range_of_date_period
         IMPORTING
@@ -42,13 +49,23 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
         RETURNING VALUE(rv_day) TYPE i,
 
       get_hours_between_times
-        importing
-          !iv_from_date   type sydatum
-          !iv_from_time   type syuzeit
-          !iv_to_Date     type sydatum
-          !iv_to_time     type syuzeit
-        returning
-          value(rv_hours) type i,
+        IMPORTING
+          !iv_from_date   TYPE sydatum
+          !iv_from_time   TYPE syuzeit
+          !iv_to_date     TYPE sydatum
+          !iv_to_time     TYPE syuzeit
+        RETURNING
+          VALUE(rv_hours) TYPE i,
+
+      get_incoming_invoice_post_date
+        IMPORTING
+          !iv_issue_date     TYPE dats
+          !iv_latest_gi_date TYPE dats OPTIONAL
+          !iv_enable_popup   TYPE abap_bool DEFAULT abap_true
+        RETURNING
+          VALUE(rv_date)     TYPE dats
+        RAISING
+          zcx_bc_date,
 
       get_last_day_of_period
         IMPORTING
@@ -59,9 +76,18 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
         RAISING
           zcx_bc_symsg,
 
+      get_minutes_between_times
+        IMPORTING
+          !iv_from_date     TYPE sydatum
+          !iv_from_time     TYPE syuzeit
+          !iv_to_date       TYPE sydatum
+          !iv_to_time       TYPE syuzeit
+        RETURNING
+          VALUE(rv_minutes) TYPE i,
+
       get_mutual_checked_days
-        importing !it_day type ZSDTT_DAY_CHECKBOX
-        returning value(rs_day) type ZSDs_DAY_CHECKBOX,
+        IMPORTING !it_day       TYPE zsdtt_day_checkbox
+        RETURNING VALUE(rs_day) TYPE zsds_day_checkbox,
 
       is_factory_workday
         IMPORTING
@@ -81,21 +107,31 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
           !ev_last_month TYPE postper_kk
           !ev_last_day   TYPE datum ,
 
-      subtract_Days_from_month_end
-        importing
-          !iv_jahrper    type jahrper
-          !iv_days       type i
-        returning
-          value(rv_date) type dats
-        raising
+      subtract_days_from_month_end
+        IMPORTING
+          !iv_jahrper    TYPE jahrper
+          !iv_days       TYPE i
+        RETURNING
+          VALUE(rv_date) TYPE dats
+        RAISING
+          zcx_bc_function_subrc,
+
+      subtract_durat_from_date_time
+        IMPORTING
+          !iv_duration TYPE i
+          !iv_unit     TYPE t006-msehi
+        CHANGING
+          !cv_date     TYPE sydatum
+          !cv_time     TYPE syuzeit
+        RAISING
           zcx_bc_function_subrc,
 
       subtract_month_from_jahrper
-        importing
-          !iv_jahrper type jahrper
-          !iv_month   type i
-        returning
-          value(rv_jahrper) type jahrper.
+        IMPORTING
+          !iv_jahrper       TYPE jahrper
+          !iv_month         TYPE i
+        RETURNING
+          VALUE(rv_jahrper) TYPE jahrper.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -118,44 +154,73 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
 
       tt_drodp_multiton TYPE HASHED TABLE OF t_drodp_multiton WITH UNIQUE KEY primary_key COMPONENTS periv date,
 
-      begin of t_fwd_cache,
-        datum   type sydatum,
-        calid   type scal-fcalid,
-        cx      type ref to zcx_bc_function_subrc,
-        workday type abap_bool,
-      end of t_fwd_Cache,
+      BEGIN OF t_fwd_cache,
+        datum   TYPE sydatum,
+        calid   TYPE scal-fcalid,
+        cx      TYPE REF TO zcx_bc_function_subrc,
+        workday TYPE abap_bool,
+      END OF t_fwd_cache,
 
       tt_fwd_cache
-        type hashed table of t_fwd_Cache
-        with unique key primary_key components datum calid.
+        TYPE HASHED TABLE OF t_fwd_cache
+        WITH UNIQUE KEY primary_key COMPONENTS datum calid,
 
-    constants:
-      c_seconds_per_hour type i value 3600.
+      tt_iipd_adhoc_cache
+        type hashed table of ZBCT_IIPD_ADHOC
+        with unique key primary_key components perio.
+
+    CONSTANTS:
+      c_seconds_per_hour   TYPE i VALUE 3600,
+      c_seconds_per_minute TYPE i VALUE 60.
 
     CLASS-DATA:
-      gt_diw_cache      TYPE tt_diw_cache,
-      gt_fwd_cache      type tt_Fwd_cache,
-      gt_drodp_multiton TYPE tt_drodp_multiton.
+      gt_diw_cache        TYPE tt_diw_cache,
+      gt_fwd_cache        TYPE tt_fwd_cache,
+      gt_drodp_multiton   TYPE tt_drodp_multiton,
+      gt_iipd_adhoc_cache type tt_iipd_adhoc_cache,
+      gv_iipd_adhoc_read  type abap_bool.
 
-    CLASS-METHODS selection_screen_text
-      IMPORTING
-        VALUE(iv_repid) TYPE rsvar-report
-        VALUE(iv_field) TYPE zsdd_field
-      RETURNING
-        VALUE(rv_text)  TYPE scrtext_l .
+    CLASS-METHODS:
+      get_iipd_limit_day returning value(rv_day)  type day_nr,
+
+      popup_date_req
+        IMPORTING
+          !iv_date       TYPE datum
+        RETURNING
+          VALUE(rv_date) TYPE datum ,
+
+      selection_screen_text
+        IMPORTING
+          VALUE(iv_repid) TYPE rsvar-report
+          VALUE(iv_field) TYPE zsdd_field
+        RETURNING
+          VALUE(rv_text)  TYPE scrtext_l .
 
 ENDCLASS.
 
 
 
-CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
+CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
 
+  METHOD add_minutes_to_date_time.
+
+    DATA(lv_itime) = CONV p2012-anzhl( iv_minutes / 60 ) ##NUMBER_OK.
+
+    CALL FUNCTION 'CATT_ADD_TO_TIME'
+      EXPORTING
+        idate = cv_date
+        itime = cv_time
+        stdaz = lv_itime
+      IMPORTING
+        edate = cv_date
+        etime = cv_time.
+
+  ENDMETHOD.
 
   METHOD check_selection_date_limit.
 
-    "--------->> written by mehmet sertkaya 20.01.2017 14:52:44
     CHECK
-      iv_tcode  IS NOT INITIAL and
+      iv_tcode  IS NOT INITIAL AND
       it_values IS NOT INITIAL.
 
     SELECT * INTO TABLE @DATA(lt_limit) FROM zbct_date_limit
@@ -163,9 +228,9 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
        WHERE tcode EQ @iv_tcode AND
              field EQ @it_values-field.
 
-    if sy-subrc NE 0.
-      return.
-    endif.
+    IF sy-subrc NE 0.
+      RETURN.
+    ENDIF.
 
     SELECT SINGLE pgmna INTO @DATA(lv_repid) FROM tstc
        WHERE tcode EQ @iv_tcode.
@@ -205,9 +270,9 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
-  method date_to_jahrper.
+  METHOD date_to_jahrper.
     rv_jahrper = |{ iv_date+0(4) }0{ iv_date+4(2) }|.
-  endmethod.
+  ENDMETHOD.
 
   METHOD get_date_range_of_date_period.
 
@@ -273,7 +338,7 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
 
   METHOD get_day_in_week.
 
-    data lv_wotnr type p.
+    DATA lv_wotnr TYPE p.
 
     ASSIGN gt_diw_cache[
         datum = iv_date
@@ -301,22 +366,93 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
 
   ENDMETHOD.
 
-  method get_hours_between_times.
+  METHOD get_hours_between_times.
 
-      cl_abap_tstmp=>td_subtract(
-        EXPORTING
-          date1    = iv_to_date
-          time1    = iv_to_time
-          date2    = iv_from_date
-          time2    = iv_from_time
-        IMPORTING
-          res_secs = rv_hours
-      ).
+    cl_abap_tstmp=>td_subtract(
+      EXPORTING
+        date1    = iv_to_date
+        time1    = iv_to_time
+        date2    = iv_from_date
+        time2    = iv_from_time
+      IMPORTING
+        res_secs = rv_hours
+    ).
 
-      DIVIDE rv_hours BY c_seconds_per_hour.
+    DIVIDE rv_hours BY c_seconds_per_hour.
+
+  ENDMETHOD.
+
+  method get_iipd_limit_day.
+
+    if gv_iipd_adhoc_read eq abap_false.
+      select * from ZBCT_IIPD_ADHOC into corresponding fields of table gt_iipd_adhoc_cache. "#EC CI_NOWHERE
+      gv_iipd_adhoc_Read = abap_true.
+    endif.
+
+    rv_day = value #(
+      gt_iipd_adhoc_Cache[
+          key primary_key components
+          perio = |{ sy-datum+0(4) }0{ sy-datum+4(2) }|
+        ]-day_nr
+      default 24
+    ) ##NUMBER_OK.
 
   endmethod.
 
+  METHOD get_incoming_invoice_post_date.
+
+    data(lv_limit_day) = get_iipd_limit_day( ).
+
+    DATA(lv_first_day_of_prev_period) = CONV sydatum(
+      |{ SWITCH numc4( sy-datum+4(2) WHEN '01' THEN sy-datum+0(4) - 1 ELSE sy-datum+0(4) ) }| &&
+      |{ SWITCH numc2( sy-datum+4(2) WHEN '01' THEN '12' ELSE sy-datum+4(2) - 1 ) }| &&
+      '01'
+    ).
+
+    DATA(lv_first_day_of_curr_period) = CONV sydatum( |{ sy-datum+0(6) }01| ).
+
+    DATA(lv_calculated_keydate) = COND sydatum(
+      WHEN iv_issue_date+0(6) EQ sy-datum+0(6) " Fatura tarihi güncel dönemdeyse
+      THEN iv_issue_date " o halde fatura tarihini al
+
+      WHEN iv_issue_date+0(6) EQ lv_first_day_of_prev_period+0(6) " Fatura tarihi bir önceki dönemdeyse
+      THEN COND #(
+        WHEN sy-datum+6(2) LE lv_limit_day " Bugün ayın 24'ünü geçmediyse
+        THEN iv_issue_date " o halde fatura tarihini al
+        ELSE lv_first_day_of_curr_period " 24'ünü geçtik -> Bulunduğumuz dönemin ilk gününü al
+      )
+
+      WHEN iv_issue_date+0(6) LT lv_first_day_of_prev_period+0(6) " Fatura tarihi bir önceki dönemden de eskiyse
+      THEN COND #(
+        WHEN sy-datum+6(2) LE lv_limit_day " Bugün ayın 24'ünü geçmediyse
+        THEN lv_first_day_of_prev_period " Önceki dönemin ilk gününü al
+        ELSE lv_first_day_of_curr_period " 24'ünü geçtik -> Bulunduğumuz dönemin ilk gününü al
+      )
+    ) ##NUMBER_OK.
+
+    IF iv_latest_gi_date IS SUPPLIED AND
+       iv_latest_gi_date IS NOT INITIAL AND
+       lv_calculated_keydate LT iv_latest_gi_date. " Bulduğumuz tarih mal girişinden eskiyse
+      lv_calculated_keydate = iv_latest_gi_date. " Mal giriş tarihini al
+    ENDIF.
+
+    rv_date = COND #(
+      WHEN
+        sy-batch EQ abap_true OR
+        iv_enable_popup EQ abap_false
+      THEN
+        lv_calculated_keydate
+      ELSE
+        popup_date_req( lv_calculated_keydate )
+    ).
+
+    IF rv_date IS INITIAL.
+      RAISE EXCEPTION TYPE zcx_bc_date
+        EXPORTING
+          textid = zcx_bc_date=>cant_determine_post_date.
+    ENDIF.
+
+  ENDMETHOD.
 
   METHOD get_last_day_of_period.
     DATA: lv_week  TYPE scal-week,
@@ -388,74 +524,89 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+  METHOD get_minutes_between_times.
 
-  method get_mutual_checked_days.
+    cl_abap_tstmp=>td_subtract(
+      EXPORTING
+        date1    = iv_to_date
+        time1    = iv_to_time
+        date2    = iv_from_date
+        time2    = iv_from_time
+      IMPORTING
+        res_secs = rv_minutes
+    ).
 
-    check it_day is not initial.
+    DIVIDE rv_minutes BY c_seconds_per_minute.
 
-    rs_day = value #(
-      monda = abap_True
+  ENDMETHOD.
+
+  METHOD get_mutual_checked_days.
+
+    CHECK it_day IS NOT INITIAL.
+
+    rs_day = VALUE #(
+      monda = abap_true
       tuesd = abap_true
       wedne = abap_true
-      thurs = abap_True
+      thurs = abap_true
       frida = abap_true
       satur = abap_true
       sunda = abap_true
     ).
 
-    loop at it_day assigning field-symbol(<ls_day>).
+    LOOP AT it_day ASSIGNING FIELD-SYMBOL(<ls_day>).
 
-      if <ls_day>-monda eq abap_False.
-        rs_day-monda = abap_False.
-      endif.
+      IF <ls_day>-monda EQ abap_false.
+        rs_day-monda = abap_false.
+      ENDIF.
 
-      if <ls_day>-tuesd eq abap_False.
-        rs_day-tuesd = abap_False.
-      endif.
+      IF <ls_day>-tuesd EQ abap_false.
+        rs_day-tuesd = abap_false.
+      ENDIF.
 
-      if <ls_day>-wedne eq abap_False.
-        rs_day-wedne = abap_False.
-      endif.
+      IF <ls_day>-wedne EQ abap_false.
+        rs_day-wedne = abap_false.
+      ENDIF.
 
-      if <ls_day>-thurs eq abap_False.
-        rs_day-thurs = abap_False.
-      endif.
+      IF <ls_day>-thurs EQ abap_false.
+        rs_day-thurs = abap_false.
+      ENDIF.
 
-      if <ls_day>-frida eq abap_False.
-        rs_day-frida = abap_False.
-      endif.
+      IF <ls_day>-frida EQ abap_false.
+        rs_day-frida = abap_false.
+      ENDIF.
 
-      if <ls_day>-satur eq abap_False.
-        rs_day-satur = abap_False.
-      endif.
+      IF <ls_day>-satur EQ abap_false.
+        rs_day-satur = abap_false.
+      ENDIF.
 
-      if <ls_day>-sunda eq abap_False.
-        rs_day-sunda = abap_False.
-      endif.
+      IF <ls_day>-sunda EQ abap_false.
+        rs_day-sunda = abap_false.
+      ENDIF.
 
-    endloop.
+    ENDLOOP.
 
-  endmethod.
+  ENDMETHOD.
 
 
-  method is_factory_workday.
+  METHOD is_factory_workday.
 
-    assign gt_fwd_cache[
-        key primary_key components
+    ASSIGN gt_fwd_cache[
+        KEY primary_key COMPONENTS
         datum = iv_datum
         calid = iv_calid
-      ] to field-symbol(<ls_fwd>).
+      ] TO FIELD-SYMBOL(<ls_fwd>).
 
-    if sy-subrc ne 0.
+    IF sy-subrc NE 0.
 
-      data(ls_fwd) = value t_fwd_cache(
+      DATA(ls_fwd) = VALUE t_fwd_cache(
         datum = iv_datum
         calid = iv_calid
       ).
 
-      try.
+      TRY.
 
-          call function 'DATE_CHECK_WORKINGDAY'
+          CALL FUNCTION 'DATE_CHECK_WORKINGDAY'
             EXPORTING
               date                       = ls_fwd-datum
               factory_calendar_id        = ls_fwd-calid
@@ -467,51 +618,51 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
               date_no_workingday         = 4
               factory_calendar_not_found = 5
               message_type_invalid       = 6
-              others                     = 7.
+              OTHERS                     = 7.
 
-          case sy-subrc.
-            when 0.
+          CASE sy-subrc.
+            WHEN 0.
               ls_fwd-workday = abap_true.
-            when 4.
-              ls_fwd-workday = abap_False.
-            when others.
-              zcx_Bc_function_subrc=>raise_if_sysubrc_not_initial( 'DATE_CHECK_WORKINGDAY' ).
-          endcase.
+            WHEN 4.
+              ls_fwd-workday = abap_false.
+            WHEN OTHERS.
+              zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'DATE_CHECK_WORKINGDAY' ).
+          ENDCASE.
 
-        catch zcx_bc_function_subrc into datA(lo_fun).
+        CATCH zcx_bc_function_subrc INTO DATA(lo_fun).
           ls_fwd-cx = lo_fun.
-      endtry.
+      ENDTRY.
 
-      insert ls_Fwd
-        into table gt_fwd_cache
-        assigning <ls_Fwd>.
+      INSERT ls_fwd
+        INTO TABLE gt_fwd_cache
+        ASSIGNING <ls_fwd>.
 
-    endif.
+    ENDIF.
 
-    if <ls_fwd>-cx is not initial.
-      raise exception <ls_fwd>-cx.
-    endif.
+    IF <ls_fwd>-cx IS NOT INITIAL.
+      RAISE EXCEPTION <ls_fwd>-cx.
+    ENDIF.
 
     rv_workday = <ls_fwd>-workday.
 
-  endmethod.
+  ENDMETHOD.
 
 
-  method is_weekday_checked.
+  METHOD is_weekday_checked.
 
-    data(lv_day_in_week) = get_day_in_week( iv_datum ).
+    DATA(lv_day_in_week) = get_day_in_week( iv_datum ).
 
     rv_checked = xsdbool(
-      ( lv_day_in_week eq 1 and is_wdays-monda eq abap_true ) OR
-      ( lv_day_in_week eq 2 and is_wdays-tuesd eq abap_true ) OR
-      ( lv_day_in_week eq 3 and is_wdays-wedne eq abap_true ) OR
-      ( lv_day_in_week eq 4 and is_wdays-thurs eq abap_true ) OR
-      ( lv_day_in_week eq 5 and is_wdays-frida eq abap_true ) OR
-      ( lv_day_in_week eq 6 and is_wdays-satur eq abap_true ) OR
-      ( lv_day_in_week eq 7 and is_wdays-sunda eq abap_true )
+      ( lv_day_in_week EQ 1 AND is_wdays-monda EQ abap_true ) OR
+      ( lv_day_in_week EQ 2 AND is_wdays-tuesd EQ abap_true ) OR
+      ( lv_day_in_week EQ 3 AND is_wdays-wedne EQ abap_true ) OR
+      ( lv_day_in_week EQ 4 AND is_wdays-thurs EQ abap_true ) OR
+      ( lv_day_in_week EQ 5 AND is_wdays-frida EQ abap_true ) OR
+      ( lv_day_in_week EQ 6 AND is_wdays-satur EQ abap_true ) OR
+      ( lv_day_in_week EQ 7 AND is_wdays-sunda EQ abap_true )
     ).
 
-  endmethod.
+  ENDMETHOD.
 
 
   METHOD last_day.
@@ -523,6 +674,52 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
         e_date = rv_day.
   ENDMETHOD.
 
+  METHOD popup_date_req.
+
+    DATA:
+      lv_title(30) TYPE c,
+      lv_retcode   TYPE c ##NEEDED,
+      lt_fields    TYPE TABLE OF sval.
+
+    lv_title = TEXT-002.
+
+    CLEAR rv_date.
+
+    APPEND VALUE #(
+        tabname   = 'SYST'
+        fieldname = 'DATUM'
+        fieldtext = TEXT-003
+        value     = iv_date
+      ) TO lt_fields.
+
+
+    CALL FUNCTION 'POPUP_GET_VALUES'
+      EXPORTING
+        popup_title = lv_title
+      IMPORTING
+        returncode  = lv_retcode
+      TABLES
+        fields      = lt_fields
+      EXCEPTIONS
+        OTHERS      = 1.
+
+    IF sy-subrc NE 0.
+      MESSAGE ID sy-msgid TYPE 'S' NUMBER sy-msgno
+                      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+                      DISPLAY LIKE 'E'.
+      RETURN.
+    ELSEIF lv_retcode EQ 'A'.
+      RETURN.
+    ENDIF.
+
+    LOOP AT lt_fields ASSIGNING FIELD-SYMBOL(<ls_field>).
+      IF <ls_field>-fieldname EQ 'DATUM' AND
+        <ls_field>-value IS NOT INITIAL.
+        rv_date = <ls_field>-value.
+      ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.
 
   METHOD previous_month_last_day.
     ev_last_day = sy-datum.
@@ -626,12 +823,12 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
 
   ENDMETHOD.
 
-  method subtract_Days_From_month_end.
+  METHOD subtract_days_from_month_end.
 
-    data(lv_year)  = iv_jahrper+0(4).
-    data(lv_month) = conv T009B-POPER( iv_jahrper+5(2) ).
+    DATA(lv_year)  = iv_jahrper+0(4).
+    DATA(lv_month) = CONV t009b-poper( iv_jahrper+5(2) ).
 
-    call function 'LAST_DAY_IN_PERIOD_GET'
+    CALL FUNCTION 'LAST_DAY_IN_PERIOD_GET'
       EXPORTING
         i_gjahr        = lv_year
         i_periv        = c_default_periv
@@ -642,34 +839,71 @@ CLASS ZCL_BC_DATETIME_TOOLKIT IMPLEMENTATION.
         input_false    = 1
         t009_notfound  = 2
         t009b_notfound = 3
-        others         = 4
-      ##FM_SUBRC_OK.
+        OTHERS         = 4
+        ##FM_SUBRC_OK.
 
     zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'LAST_DAY_IN_PERIOD_GET' ).
 
-    subtract iv_days from rv_date.
+    SUBTRACT iv_days FROM rv_date.
 
-  endmethod.
+  ENDMETHOD.
 
-  method subtract_month_from_jahrper.
+  METHOD subtract_durat_from_date_time.
 
-    data:
-      lv_year  type numc4,
-      lv_month type numc2.
+    DATA:
+      lv_end_date TYPE sydatum,
+      lv_end_time TYPE syuzeit.
+
+    DATA(lv_start_date) = cv_date.
+    DATA(lv_start_time) = cv_time.
+    DATA(lv_negative_duration) = iv_duration * -1.
+
+    CALL FUNCTION 'END_TIME_DETERMINE'
+      EXPORTING
+        duration                   = lv_negative_duration
+        unit                       = iv_unit
+      IMPORTING
+        end_date                   = lv_end_date
+        end_time                   = lv_end_time
+      CHANGING
+        start_date                 = lv_start_date
+        start_time                 = lv_start_time
+      EXCEPTIONS
+        factory_calendar_not_found = 1
+        date_out_of_calendar_range = 2
+        date_not_valid             = 3
+        unit_conversion_error      = 4
+        si_unit_missing            = 5
+        parameters_no_valid        = 6
+        OTHERS                     = 7
+        ##FM_SUBRC_OK.
+
+    zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'END_TIME_DETERMINE' ).
+
+    cv_date = lv_end_date.
+    cv_time = lv_end_time.
+
+  ENDMETHOD.
+
+  METHOD subtract_month_from_jahrper.
+
+    DATA:
+      lv_year  TYPE numc4,
+      lv_month TYPE numc2.
 
     lv_year  = iv_jahrper+0(4).
     lv_month = iv_jahrper+5(2).
 
-    do iv_month times.
-      subtract 1 from lv_month.
-      if lv_month is initial.
-        subtract 1 from lv_year.
-        lv_month = 12.
-      endif.
-    enddo.
+    DO iv_month TIMES.
+      SUBTRACT 1 FROM lv_month.
+      IF lv_month IS INITIAL.
+        SUBTRACT 1 FROM lv_year.
+        lv_month = 12 ##NUMBER_OK.
+      ENDIF.
+    ENDDO.
 
     rv_jahrper = |{ lv_year }0{ lv_month }|.
 
-  endmethod.
+  ENDMETHOD.
 
 ENDCLASS.

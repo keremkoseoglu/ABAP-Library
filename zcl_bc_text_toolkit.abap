@@ -5,29 +5,42 @@ CLASS zcl_bc_text_toolkit DEFINITION
 
   PUBLIC SECTION.
 
-    TYPES tt_string TYPE STANDARD TABLE OF string.
+    TYPES:
+      tt_string TYPE STANDARD TABLE OF string .
 
-    CLASS-METHODS:
-      get_shortest_text
-        IMPORTING
-          !it_candidate       TYPE tt_string
-          !iv_ignore_if_empty TYPE abap_bool DEFAULT abap_true
-        RETURNING
-          VALUE(rv_shortest)  TYPE string,
+    CLASS-METHODS get_shortest_text
+      IMPORTING
+        !it_candidate       TYPE tt_string
+        !iv_ignore_if_empty TYPE abap_bool DEFAULT abap_true
+      RETURNING
+        VALUE(rv_shortest)  TYPE string .
 
-      remove_non_alphanum_chars
-        importing !iv_valid_chars type clike optional
-        changing  !cv_text        type clike,
+    CLASS-METHODS get_text_after_separator
+      IMPORTING
+        !iv_text       TYPE clike
+        !iv_separator  TYPE clike
+      RETURNING
+        VALUE(rv_text) TYPE string.
 
-      remove_text_in_string
-        IMPORTING
-          !iv_string       TYPE clike
-          !iv_remove       TYPE clike
-        RETURNING
-          VALUE(rv_result) TYPE string,
-
-      replace_turkish_characters CHANGING !cv_text TYPE clike.
-
+    CLASS-METHODS is_string_an_integer
+      IMPORTING
+        !iv_string   TYPE string
+      RETURNING
+        VALUE(rv_is) TYPE abap_bool .
+    CLASS-METHODS remove_non_alphanum_chars
+      IMPORTING
+        !iv_valid_chars TYPE clike OPTIONAL
+      CHANGING
+        !cv_text        TYPE clike .
+    CLASS-METHODS remove_text_in_string
+      IMPORTING
+        !iv_string       TYPE clike
+        !iv_remove       TYPE clike
+      RETURNING
+        VALUE(rv_result) TYPE string .
+    CLASS-METHODS replace_turkish_characters
+      CHANGING
+        !cv_text TYPE clike .
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -39,14 +52,14 @@ CLASS zcl_bc_text_toolkit DEFINITION
 
       tt_text_and_len TYPE STANDARD TABLE OF t_text_and_len WITH DEFAULT KEY.
 
-    constants:
-      c_alphanumeric type string value `1234567890qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM `.
-
+    CONSTANTS:
+      c_alphanumeric TYPE string VALUE `1234567890qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM `.
 ENDCLASS.
 
 
 
 CLASS zcl_bc_text_toolkit IMPLEMENTATION.
+
 
   METHOD get_shortest_text.
 
@@ -69,35 +82,69 @@ CLASS zcl_bc_text_toolkit IMPLEMENTATION.
 
   ENDMETHOD.
 
-  method remove_non_alphanum_chars.
+  METHOD get_text_after_separator.
 
-    data(lv_output) = conv string( space ).
-    data(lv_length) = strlen( cv_text ).
-    data(lv_pos) = 0.
+    DATA lt_split TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
 
-    while lv_pos lt lv_length.
-      data(lv_char) = conv string( cv_text+lv_pos(1) ).
-      if lv_char ca c_alphanumeric or
-         ( iv_valid_chars is not initial and
-           lv_char ca iv_valid_Chars
+    CHECK iv_text IS NOT INITIAL.
+
+    SPLIT iv_text AT iv_separator INTO TABLE lt_split.
+
+    IF lines( lt_split ) LE 0.
+      RETURN.
+    ENDIF.
+
+    rv_text = lt_split[ lines( lt_split ) ].
+
+  ENDMETHOD.
+
+  METHOD is_string_an_integer.
+
+    DATA lv_int TYPE i.
+
+    CHECK iv_string IS NOT INITIAL.
+
+    TRY.
+        MOVE EXACT iv_string TO lv_int.
+        rv_is = abap_true.
+      CATCH cx_root.
+        rv_is = abap_false.
+    ENDTRY.
+
+  ENDMETHOD.
+
+
+  METHOD remove_non_alphanum_chars.
+
+    DATA(lv_output) = CONV string( space ).
+    DATA(lv_length) = strlen( cv_text ).
+    DATA(lv_pos) = 0.
+
+    WHILE lv_pos LT lv_length.
+      DATA(lv_char) = CONV string( cv_text+lv_pos(1) ).
+      IF lv_char CA c_alphanumeric OR
+         ( iv_valid_chars IS NOT INITIAL AND
+           lv_char CA iv_valid_chars
          ).
         lv_output = |{ lv_output }{ lv_char }|.
-      else.
+      ELSE.
         lv_output = |{ lv_output } |.
-      endif.
+      ENDIF.
 
-      add 1 to lv_pos.
+      ADD 1 TO lv_pos.
 
-    endwhile.
+    ENDWHILE.
 
     cv_text = lv_output.
 
-  endmethod.
+  ENDMETHOD.
+
 
   METHOD remove_text_in_string.
     rv_result = iv_string.
     REPLACE ALL OCCURRENCES OF iv_remove IN rv_result WITH space.
   ENDMETHOD.
+
 
   METHOD replace_turkish_characters.
 
@@ -115,6 +162,6 @@ CLASS zcl_bc_text_toolkit IMPLEMENTATION.
       'ç' IN cv_text WITH 'c',
       'Ç' IN cv_text WITH 'C'.
 
-  ENDMETHOD.
 
+  ENDMETHOD.
 ENDCLASS.

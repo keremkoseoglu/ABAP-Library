@@ -147,7 +147,7 @@ public section.
     importing
       !iv_matnr type matnr
       !iv_charg type charg_d
-      value(it_lines) type tline_tab .
+      !it_lines type tline_tab .
   class-methods get_material_class_data
     importing
       !iv_matnr type matnr
@@ -779,13 +779,15 @@ call function 'BAPI_OBJCL_GETDETAIL'
     ls_header-tdspras = c_langu.
     ls_header-tdobject = c_tdobject.
 
+    data(lt_lines) = it_lines.
+
     CALL FUNCTION 'SAVE_TEXT'
       EXPORTING
         header          = ls_header
 *       insert          = 'X'
         savemode_direct = 'X'
       TABLES
-        lines           = it_lines
+        lines           = lt_lines
       EXCEPTIONS
         id              = 1
         language        = 2

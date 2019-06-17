@@ -9,6 +9,7 @@ CLASS zcl_sd_sales_org DEFINITION
       BEGIN OF t_def,
         vkorg TYPE tvko-vkorg,
         bukrs TYPE tvko-bukrs,
+        waers TYPE tvko-waers,
       END OF t_def,
 
       BEGIN OF t_vkorg,
@@ -17,7 +18,8 @@ CLASS zcl_sd_sales_org DEFINITION
 
       tt_vkorg     TYPE STANDARD TABLE OF t_vkorg WITH DEFAULT KEY,
 
-      tt_vkorg_rng TYPE RANGE OF vkorg.
+      tt_vkorg_rng TYPE RANGE OF vkorg,
+      tt_waers_rng TYPE RANGE OF waers.
 
     DATA:
       go_company TYPE REF TO zcl_fi_company READ-ONLY,
@@ -31,8 +33,22 @@ CLASS zcl_sd_sales_org DEFINITION
         RETURNING
           VALUE(ro_obj) TYPE REF TO zcl_sd_sales_org
         RAISING
-          ZCX_FI_COMPANY_CODE_DEF
-          zcx_sd_sales_org_def.
+          zcx_fi_company_code_def
+          zcx_sd_sales_org_def,
+
+      get_sales_org_list
+        IMPORTING
+          !it_vkorg_rng   TYPE tt_vkorg_rng OPTIONAL
+          !it_waers_rng   TYPE tt_waers_rng OPTIONAL
+        RETURNING
+          VALUE(rt_vkorg) TYPE tt_vkorg,
+
+      get_sales_org_range
+        IMPORTING
+          !it_vkorg_rng       TYPE tt_vkorg_rng OPTIONAL
+          !it_waers_rng       TYPE tt_waers_rng OPTIONAL
+        RETURNING
+          VALUE(rt_vkorg_rng) TYPE tt_vkorg_rng.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -71,20 +87,20 @@ CLASS zcl_sd_sales_org IMPLEMENTATION.
       DATA(ls_multiton) = VALUE t_multiton( vkorg = iv_vkorg ).
       ls_multiton-obj = NEW #( ).
 
-      SELECT SINGLE vkorg, bukrs
+      SELECT SINGLE vkorg, bukrs, waers
         INTO CORRESPONDING FIELDS OF @ls_multiton-obj->gs_def
         FROM tvko
         WHERE vkorg EQ @ls_multiton-vkorg.
 
       IF sy-subrc NE 0.
 
-        data(lo_tc) = new zcx_bc_table_content(
+        DATA(lo_tc) = NEW zcx_bc_table_content(
           textid   = zcx_bc_table_content=>entry_missing
           objectid = CONV #( iv_vkorg )
           tabname  = c_tabname_tvko
         ).
 
-        raise exception type zcx_sd_sales_org_def
+        RAISE EXCEPTION TYPE zcx_sd_sales_org_def
           EXPORTING
             previous = lo_tc
             vkorg    = iv_vkorg.
@@ -100,4 +116,32 @@ CLASS zcl_sd_sales_org IMPLEMENTATION.
     ro_obj = <ls_multiton>-obj.
 
   ENDMETHOD.
+
+  method get_sales_org_list.
+
+    SELECT tvko~vkorg
+      FROM tvko
+      WHERE
+        vkorg IN @it_vkorg_rng AND
+        waers IN @it_waers_rng
+      INTO table @rt_vkorg.
+
+  endmethod.
+
+  METHOD get_sales_org_range.
+
+    rt_vkorg_rng = value #(
+      for _vkorg in get_sales_org_list(
+        it_vkorg_rng = it_Vkorg_rng
+        it_waers_rng = it_waers_rng
+      )
+      (
+        sign   = zcl_bc_ddic_toolkit=>c_sign_i
+        option = zcl_Bc_Ddic_Toolkit=>c_option_eq
+        low    = _vkorg
+      )
+    ).
+
+  ENDMETHOD.
+
 ENDCLASS.

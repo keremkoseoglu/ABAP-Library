@@ -67,6 +67,16 @@ public section.
       value(RV_EMAIL) type ADR6-SMTP_ADDR
     raising
       ZCX_BC_USER_MASTER_DATA .
+  class-methods GET_EXCEL_COLUMNS_OF_FCAT
+    importing
+      !IT_FCAT type SLIS_T_FIELDCAT_ALV
+    returning
+      value(RT_COL) type ZSDTT_COLUMN .
+  class-methods GET_EXCEL_COLUMNS_OF_TABLE
+    importing
+      !IV_TABNAME type TABNAME
+    returning
+      value(RT_COL) type ZSDTT_COLUMN .
   class-methods SEND_EMAIL
     importing
       !IV_FROM type SYUNAME default SY-UNAME
@@ -83,6 +93,7 @@ public section.
       !IV_REQUESTED_STATUS type BCS_RQST default 'E'
       value(IV_COMMIT) type CHAR1 default 'X'
       !IV_LONG_SUBJECT type STRING optional
+      !IV_SENSITIVITY type SO_OBJ_SNS optional
     raising
       ZCX_BC_MAIL_SEND .
   class-methods SEND_EMAIL_WITH_SAP_LINK
@@ -147,7 +158,7 @@ public section.
   PRIVATE SECTION.
 
     CONSTANTS c_att_type_pdf TYPE soodk-objtp VALUE 'PDF' ##NO_TEXT.
-    constants c_linsz type i value 255.
+    CONSTANTS c_linsz TYPE i VALUE 255.
     CONSTANTS c_obj_tp_raw TYPE so_obj_tp VALUE 'RAW' ##NO_TEXT.
 ENDCLASS.
 
@@ -207,6 +218,43 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
   ENDMETHOD.
 
 
+  method get_Excel_columns_of_fcat.
+
+    LOOP AT it_fcat ASSIGNING FIELD-SYMBOL(<ls_fcat>).
+
+      APPEND VALUE #(
+          zcolumn     = sy-tabix
+          zcolumn_txt = <ls_fcat>-seltext_l
+        ) TO rt_col.
+
+    ENDLOOP.
+
+  endmethod.
+
+
+  METHOD get_excel_columns_of_table.
+
+    DATA lt_fcat TYPE slis_t_fieldcat_alv.
+
+    CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
+      EXPORTING
+        i_structure_name       = iv_tabname
+      CHANGING
+        ct_fieldcat            = lt_fcat
+      EXCEPTIONS
+        inconsistent_interface = 1
+        program_error          = 2
+        OTHERS                 = 3.
+
+    IF sy-subrc NE 0.
+      RETURN.
+    ENDIF.
+
+    rt_col = get_excel_columns_of_fcat( lt_fcat ).
+
+  ENDMETHOD.
+
+
   METHOD get_user_of_email.
 
     SELECT SINGLE u~bname
@@ -228,13 +276,13 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD send_email.
+  method send_email.
 
-    TRY.
+    try.
 *       Nesne
-        DATA(lo_send_request) = cl_bcs=>create_persistent( ).
+        data(lo_send_request) = cl_bcs=>create_persistent( ).
 *{  EDIT  Berrin Ulus 13.04.2016 15:46:16
-        lo_send_request->set_status_attributes( EXPORTING i_requested_status = iv_requested_status    " N No Status, E Only Error Statuses, A Return All Statuses
+        lo_send_request->set_status_attributes( exporting i_requested_status = iv_requested_status    " N No Status, E Only Error Statuses, A Return All Statuses
                                                           i_status_mail      = 'E' ). " N No Status, E Only Error Statuses, A All Statuses
 *}  EDIT  Berrin Ulus 13.04.2016 15:46:16
 
@@ -244,153 +292,159 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
         lo_send_request->set_sender( cl_sapuser_bcs=>create( iv_from ) ).
 
 *       Alıcılar (USER NAME)
-        LOOP AT it_to ASSIGNING FIELD-SYMBOL(<lv_to>).
-          TRY.
+        loop at it_to assigning field-symbol(<lv_to>).
+          try.
               lo_send_request->add_recipient( i_recipient = cl_cam_address_bcs=>create_internet_address( get_email_of_user( <lv_to> ) )
                                               i_express   = abap_true ).
 
-            CATCH zcx_bc_user_master_data INTO DATA(lo_cx_bumd).
-              IF iv_tolerate_no_addr EQ abap_false.
-                RAISE EXCEPTION lo_cx_bumd.
-              ENDIF.
-          ENDTRY.
+            catch zcx_bc_user_master_data into data(lo_cx_bumd).
+              if iv_tolerate_no_addr eq abap_false.
+                raise exception lo_cx_bumd.
+              endif.
+          endtry.
 
-        ENDLOOP.
+        endloop.
 
 *       Alıcılar (Mail Adres)
-        LOOP AT it_rlist ASSIGNING FIELD-SYMBOL(<ls_rlist>).
-          TRY.
+        loop at it_rlist assigning field-symbol(<ls_rlist>).
+          try.
               lo_send_request->add_recipient( i_recipient = cl_cam_address_bcs=>create_internet_address( <ls_rlist>-smtpadr )
                                               i_express   = abap_true
                                               i_copy       = <ls_rlist>-sndcp
                                               i_blind_copy = <ls_rlist>-sndbc
                                             ).
 
-            CATCH zcx_bc_user_master_data INTO lo_cx_bumd.
-              IF iv_tolerate_no_addr EQ abap_false.
-                RAISE EXCEPTION lo_cx_bumd.
-              ENDIF.
-          ENDTRY.
+            catch zcx_bc_user_master_data into lo_cx_bumd.
+              if iv_tolerate_no_addr eq abap_false.
+                raise exception lo_cx_bumd.
+              endif.
+          endtry.
 
-        ENDLOOP.
+        endloop.
 
 *       Dağıtım listesi
-        IF it_dlist IS SUPPLIED.
-          LOOP AT it_dlist ASSIGNING FIELD-SYMBOL(<ls_list>).
-            TRY.
+        if it_dlist is supplied.
+          loop at it_dlist assigning field-symbol(<ls_list>).
+            try.
 
                 lo_send_request->add_recipient(
                     i_recipient  = cl_distributionlist_bcs=>getu_persistent( i_dliname = <ls_list>-dname
                                                                              i_private = '' )
                     i_express    =  abap_true ).
 
-              CATCH zcx_bc_user_master_data INTO lo_cx_bumd.
-                IF iv_tolerate_no_addr EQ abap_false.
-                  RAISE EXCEPTION lo_cx_bumd.
-                ENDIF.
-            ENDTRY.
-          ENDLOOP.
-        ENDIF.
+              catch zcx_bc_user_master_data into lo_cx_bumd.
+                if iv_tolerate_no_addr eq abap_false.
+                  raise exception lo_cx_bumd.
+                endif.
+            endtry.
+          endloop.
+        endif.
 
 *       kullanıcı adı ya da dağıtım listesi tanımlı olmalı
 
-        IF it_to[] IS INITIAL AND
-           it_dlist[] IS INITIAL AND
-           it_rlist[] IS INITIAL.
+        if it_to[] is initial and
+           it_dlist[] is initial and
+           it_rlist[] is initial.
 
-          IF iv_tolerate_no_addr EQ abap_false.
-            RAISE EXCEPTION TYPE zcx_bc_method_parameter
-              EXPORTING
+          if iv_tolerate_no_addr eq abap_false.
+            raise exception type zcx_bc_method_parameter
+              exporting
                 class_name  = 'ZCL_BC_MAIL_FACADE'
                 method_name = 'SEND_EMAIL'
                 textid      = zcx_bc_method_parameter=>param_error.
           else.
             return.
-          ENDIF.
+          endif.
 
-        ENDIF.
+        endif.
 
 
 *       Metin
-        DATA(lo_doc) = cl_document_bcs=>create_document( i_type    = c_obj_tp_raw
+        data(lo_doc) = cl_document_bcs=>create_document( i_type    = c_obj_tp_raw
                                                          i_text    = it_body
                                                          i_subject = iv_subject ).
+        if iv_sensitivity is not initial.
+          lo_doc->set_sensitivity( iv_sensitivity ).
+        endif.
 
 *       html
-        IF it_body_html IS NOT INITIAL.
-          DATA(lo_doc_html) = cl_document_bcs=>create_document( i_type  = c_doc_type_htm
+        if it_body_html is not initial.
+          data(lo_doc_html) = cl_document_bcs=>create_document( i_type  = c_doc_type_htm
                                                            i_text    = it_body_html
                                                            i_subject = iv_subject ).
-        ENDIF.
-        IF iv_long_subject IS NOT INITIAL.
-          lo_send_request->set_message_subject( iv_long_subject ).
-        ENDIF.
+          if iv_sensitivity is not initial.
+            lo_doc_html->set_sensitivity( iv_sensitivity ).
+          endif.
+        endif.
 
+        if iv_long_subject is not initial.
+          lo_send_request->set_message_subject( iv_long_subject ).
+        endif.
 *       Attachment
 
-        IF it_att_bin IS SUPPLIED.
-          LOOP AT it_att_bin ASSIGNING FIELD-SYMBOL(<ls_att_bin>).
+        if it_att_bin is supplied.
+          loop at it_att_bin assigning field-symbol(<ls_att_bin>).
             lo_doc->add_attachment( i_attachment_type    = <ls_att_bin>-att_type
                                     i_attachment_subject = <ls_att_bin>-att_subject
                                     i_att_content_hex    = <ls_att_bin>-att_content ).
-          ENDLOOP.
-        ENDIF.
+          endloop.
+        endif.
 
-        IF it_att_txt IS SUPPLIED.
-          LOOP AT it_att_txt ASSIGNING FIELD-SYMBOL(<ls_att_txt>).
+        if it_att_txt is supplied.
+          loop at it_att_txt assigning field-symbol(<ls_att_txt>).
             lo_doc->add_attachment( i_attachment_type    = <ls_att_txt>-att_type
                                     i_attachment_subject = <ls_att_txt>-att_subject
                                     i_att_content_text   = <ls_att_txt>-att_content ).
-          ENDLOOP.
-        ENDIF.
+          endloop.
+        endif.
 
-        IF it_att_spool IS SUPPLIED.
-          LOOP AT it_att_spool ASSIGNING FIELD-SYMBOL(<ls_att_spool>).
+        if it_att_spool is supplied.
+          loop at it_att_spool assigning field-symbol(<ls_att_spool>).
 
             zcl_bc_spool_toolkit=>conv_spool_to_pdf(
-                EXPORTING
+                exporting
                     iv_spoolid = <ls_att_spool>-spoolid
                     iv_partnum = <ls_att_spool>-partnum
-                 IMPORTING
-                    et_solix   = DATA(lt_pdf_solix)
+                 importing
+                    et_solix   = data(lt_pdf_solix)
             ).
 
             lo_doc->add_attachment( i_attachment_type    = c_att_type_pdf
                                     i_attachment_subject = <ls_att_spool>-att_subject
                                     i_att_content_hex    = lt_pdf_solix ).
-          ENDLOOP.
-        ENDIF.
+          endloop.
+        endif.
 
 *       Gönder
         lo_send_request->set_document( lo_doc ).
-        IF it_body_html IS NOT INITIAL.
+        if it_body_html is not initial.
           lo_send_request->set_document( lo_doc_html ).
-        ENDIF.
+        endif.
 
 
-        IF lo_send_request->send( ) NE abap_true.
-          RAISE EXCEPTION TYPE zcx_bc_mail_send
-            EXPORTING
+        if lo_send_request->send( ) ne abap_true.
+          raise exception type zcx_bc_mail_send
+            exporting
               textid = zcx_bc_mail_send=>cant_send.
-        ELSE.
-          IF iv_commit EQ abap_true.
-            COMMIT WORK.
-          ENDIF.
+        else.
+          if iv_commit eq abap_true.
+            commit work.
+          endif.
 
-        ENDIF.
+        endif.
 
-      CATCH zcx_bc_mail_send INTO DATA(lo_cx_ms).
-        RAISE EXCEPTION lo_cx_ms.
+      catch zcx_bc_mail_send into data(lo_cx_ms).
+        raise exception lo_cx_ms.
 
-      CATCH cx_root INTO DATA(lo_cx_root).
-        RAISE EXCEPTION TYPE zcx_bc_mail_send
-          EXPORTING
+      catch cx_root into data(lo_cx_root).
+        raise exception type zcx_bc_mail_send
+          exporting
             textid   = zcx_bc_mail_send=>cant_send
             previous = lo_cx_root.
 
-    ENDTRY.
+    endtry.
 
-  ENDMETHOD.
+  endmethod.
 
 
   METHOD send_email_with_sap_link.
@@ -557,82 +611,82 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
   ENDMETHOD.
 
 
-  method send_html_table_email.
+  METHOD send_html_table_email.
 
-    data : lo_table  type ref to cl_abap_tabledescr,
-           lo_str    type ref to cl_abap_structdescr,
-           lt_fields type abap_compdescr_tab,
-           ls_fields type abap_compdescr,
-           lt_lines  type table of tline.
+    DATA : lo_table  TYPE REF TO cl_abap_tabledescr,
+           lo_str    TYPE REF TO cl_abap_structdescr,
+           lt_fields TYPE abap_compdescr_tab,
+           ls_fields TYPE abap_compdescr,
+           lt_lines  TYPE TABLE OF tline.
 
-    data : lt_output_soli type table of soli,
-           ls_output_soli type          soli,
-           lt_objpack     type table of sopcklsti1,
-           ls_objpack     type          sopcklsti1,
-           lt_objhead     type table of solisti1,
-           lt_objtxt      type table of solisti1,
-           ls_objtxt      type          solisti1,
-           lt_reclist     type table of somlreci1,
-           ls_reclist     type          somlreci1,
-           ls_doc_chng    type          sodocchgi1.
+    DATA : lt_output_soli TYPE TABLE OF soli,
+           ls_output_soli TYPE          soli,
+           lt_objpack     TYPE TABLE OF sopcklsti1,
+           ls_objpack     TYPE          sopcklsti1,
+           lt_objhead     TYPE TABLE OF solisti1,
+           lt_objtxt      TYPE TABLE OF solisti1,
+           ls_objtxt      TYPE          solisti1,
+           lt_reclist     TYPE TABLE OF somlreci1,
+           ls_reclist     TYPE          somlreci1,
+           ls_doc_chng    TYPE          sodocchgi1.
 
-    data : lv_lines       type sy-tabix,
-           lv_msg_lines   type sy-tabix,
-           lv_sent_all(1) type c        ##NEEDED.
+    DATA : lv_lines       TYPE sy-tabix,
+           lv_msg_lines   TYPE sy-tabix,
+           lv_sent_all(1) TYPE c        ##NEEDED.
 
-    data : lv_line_data    type i,
-           lv_line_columns type i.
+    DATA : lv_line_data    TYPE i,
+           lv_line_columns TYPE i.
 
 
-    try.
+    TRY.
 
 *       T_DATA kolon sayısı / T_COLUMNS kolon sayısı UYUMLU MU?
         lo_table ?= cl_abap_typedescr=>describe_by_data( t_data ).
         lo_str   ?= lo_table->get_table_line_type( ).
-        append lines of lo_str->components to lt_fields.
+        APPEND LINES OF lo_str->components TO lt_fields.
 
-        describe table lt_fields  lines lv_line_data.
-        describe table t_columns lines lv_line_columns.
+        DESCRIBE TABLE lt_fields  LINES lv_line_data.
+        DESCRIBE TABLE t_columns LINES lv_line_columns.
 
-        if lv_line_data ne lv_line_columns.
-          raise exception type zcx_bc_mail_send
-            exporting
+        IF lv_line_data NE lv_line_columns.
+          RAISE EXCEPTION TYPE zcx_bc_mail_send
+            EXPORTING
               textid = zcx_bc_mail_send=>column_number_not_valid.
-        endif.
+        ENDIF.
 
 
 *       Mail başlık
-        if iv_subject is initial.
-          ls_doc_chng-obj_name  = text-001.
-          ls_doc_chng-obj_descr = text-001.
-        else.
+        IF iv_subject IS INITIAL.
+          ls_doc_chng-obj_name  = TEXT-001.
+          ls_doc_chng-obj_descr = TEXT-001.
+        ELSE.
           ls_doc_chng-obj_name  = iv_subject.
           ls_doc_chng-obj_descr = iv_subject.
-        endif.
+        ENDIF.
 
 
 *       Mail HTML Body
-        clear ls_objtxt.
+        CLEAR ls_objtxt.
         ls_objtxt-line = '<body bgcolor = "#FFFFFF">'.
-        append ls_objtxt to lt_objtxt.
+        APPEND ls_objtxt TO lt_objtxt.
 
-        clear ls_objtxt.
-        concatenate '<FONT COLOR = "#000000" face="Garamond">' '<b>'
-               into ls_objtxt-line.
-        append ls_objtxt to lt_objtxt.
+        CLEAR ls_objtxt.
+        CONCATENATE '<FONT COLOR = "#000000" face="Garamond">' '<b>'
+               INTO ls_objtxt-line.
+        APPEND ls_objtxt TO lt_objtxt.
 
 
-        if t_body is initial.
+        IF t_body IS INITIAL.
 *       Mail body text / SO10
-          call function 'READ_TEXT'
-            exporting
+          CALL FUNCTION 'READ_TEXT'
+            EXPORTING
               id                      = 'ST'
               language                = sy-langu
               name                    = iv_so10_object
               object                  = 'TEXT'
-            tables
+            TABLES
               lines                   = lt_lines
-            exceptions
+            EXCEPTIONS
               id                      = 1
               language                = 2
               name                    = 3
@@ -640,67 +694,67 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
               object                  = 5
               reference_check         = 6
               wrong_access_to_archive = 7
-              others                  = 8.
+              OTHERS                  = 8.
 
-          if sy-subrc = 0.
-            loop at lt_lines assigning field-symbol(<s_lines>).
+          IF sy-subrc = 0.
+            LOOP AT lt_lines ASSIGNING FIELD-SYMBOL(<s_lines>).
               html_body_txt  : <s_lines>-tdline.
-            endloop.
-          endif.
-        else.
-          loop at t_body assigning field-symbol(<s_body>).
+            ENDLOOP.
+          ENDIF.
+        ELSE.
+          LOOP AT t_body ASSIGNING FIELD-SYMBOL(<s_body>).
             html_body_txt  : <s_body>-tdline.
-          endloop.
-        endif.
+          ENDLOOP.
+        ENDIF.
 
 
-        clear ls_objtxt.
+        CLEAR ls_objtxt.
         ls_objtxt-line = '<center>'.
-        append ls_objtxt to lt_objtxt.
+        APPEND ls_objtxt TO lt_objtxt.
 
-        clear  ls_objtxt.
+        CLEAR  ls_objtxt.
         ls_objtxt-line = '<TABLE  width= "100%" border="1">'.
-        append ls_objtxt to lt_objtxt.
+        APPEND ls_objtxt TO lt_objtxt.
 
-        loop at t_columns assigning field-symbol(<s_columns>).
-          if sy-tabix = 1.
+        LOOP AT t_columns ASSIGNING FIELD-SYMBOL(<s_columns>).
+          IF sy-tabix = 1.
             html_hdr  : '<TR>' <s_columns>-zcolumn_txt.
-          else.
+          ELSE.
             html_hdr  : ''     <s_columns>-zcolumn_txt.
-          endif.
-        endloop.
+          ENDIF.
+        ENDLOOP.
 
-        loop at t_data assigning field-symbol(<fs>).
+        LOOP AT t_data ASSIGNING FIELD-SYMBOL(<fs>).
 
-          loop at lt_fields into ls_fields.
-            assign component ls_fields-name of structure <fs> to field-symbol(<fs_value>).
+          LOOP AT lt_fields INTO ls_fields.
+            ASSIGN COMPONENT ls_fields-name OF STRUCTURE <fs> TO FIELD-SYMBOL(<fs_value>).
 
-            if sy-tabix = 1.
+            IF sy-tabix = 1.
               html_itm : '<TR>' <fs_value>.
-            else.
+            ELSE.
               html_itm : ''    <fs_value>.
-            endif.
-          endloop.
+            ENDIF.
+          ENDLOOP.
 
-        endloop.
+        ENDLOOP.
 
 
         ls_objtxt-line = '</TABLE>'.
-        append ls_objtxt to lt_objtxt.
-        clear  ls_objtxt.
+        APPEND ls_objtxt TO lt_objtxt.
+        CLEAR  ls_objtxt.
 
         ls_objtxt-line = '</center>'.
-        append ls_objtxt to lt_objtxt.
-        clear ls_objtxt.
+        APPEND ls_objtxt TO lt_objtxt.
+        CLEAR ls_objtxt.
 
         ls_objtxt-line = '</FONT></body>'.
-        append ls_objtxt to lt_objtxt.
-        clear ls_objtxt.
+        APPEND ls_objtxt TO lt_objtxt.
+        CLEAR ls_objtxt.
 
 
 *       Packing
-        describe table lt_objtxt lines lv_msg_lines.
-        read table lt_objtxt into ls_objtxt index lv_msg_lines.
+        DESCRIBE TABLE lt_objtxt LINES lv_msg_lines.
+        READ TABLE lt_objtxt INTO ls_objtxt INDEX lv_msg_lines.
 
         ls_doc_chng-doc_size  = ( lv_msg_lines - 1 ) * c_linsz + strlen( ls_objtxt ).
         ls_objpack-transf_bin = ' '.
@@ -709,45 +763,45 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
         ls_objpack-body_start = 1.
         ls_objpack-body_num   = lv_msg_lines.
         ls_objpack-doc_type   = c_doc_type_htm.
-        append ls_objpack to lt_objpack.
-        clear ls_objpack.
+        APPEND ls_objpack TO lt_objpack.
+        CLEAR ls_objpack.
 
-        describe table lt_output_soli lines lv_lines.
+        DESCRIBE TABLE lt_output_soli LINES lv_lines.
 
-        if lv_lines <> 0.
-          loop at lt_output_soli into ls_output_soli.
+        IF lv_lines <> 0.
+          LOOP AT lt_output_soli INTO ls_output_soli.
             ls_objtxt = ls_output_soli.
-            append ls_objtxt to lt_objtxt.
-            clear ls_objtxt.
-          endloop.
-        endif.
+            APPEND ls_objtxt TO lt_objtxt.
+            CLEAR ls_objtxt.
+          ENDLOOP.
+        ENDIF.
 
 
 *       Mail receivers
-        loop at t_rcvlist assigning field-symbol(<s_rcvlist>).
+        LOOP AT t_rcvlist ASSIGNING FIELD-SYMBOL(<s_rcvlist>).
           ls_reclist-receiver = <s_rcvlist>-receiver.
           ls_reclist-rec_type = c_rec_type.
           ls_reclist-express  = c_express.
           ls_reclist-copy = abap_true.
-          append ls_reclist to lt_reclist.
-          free ls_reclist.
-        endloop.
+          APPEND ls_reclist TO lt_reclist.
+          FREE ls_reclist.
+        ENDLOOP.
 
 
 *       Send mail
-        call function 'SO_DOCUMENT_SEND_API1'
-          exporting
+        CALL FUNCTION 'SO_DOCUMENT_SEND_API1'
+          EXPORTING
             document_data              = ls_doc_chng
             put_in_outbox              = 'X'
             commit_work                = 'X'
-          importing
+          IMPORTING
             sent_to_all                = lv_sent_all
-          tables
+          TABLES
             packing_list               = lt_objpack
             object_header              = lt_objhead
             contents_txt               = lt_objtxt
             receivers                  = lt_reclist
-          exceptions
+          EXCEPTIONS
             too_many_receivers         = 1
             document_not_sent          = 2
             document_type_not_exist    = 3
@@ -755,26 +809,26 @@ CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
             parameter_error            = 5
             x_error                    = 6
             enqueue_error              = 7
-            others                     = 8.
+            OTHERS                     = 8.
 
-        if sy-subrc = 0.
+        IF sy-subrc = 0.
           cl_os_transaction_end_notifier=>raise_commit_requested( ).
-          call function 'DB_COMMIT'.
+          CALL FUNCTION 'DB_COMMIT'.
           cl_os_transaction_end_notifier=>raise_commit_finished( ).
-        endif.
+        ENDIF.
 
-      catch zcx_bc_mail_send into data(lo_cx_html).
-        raise exception lo_cx_html.
+      CATCH zcx_bc_mail_send INTO DATA(lo_cx_html).
+        RAISE EXCEPTION lo_cx_html.
 
-      catch cx_root into data(lo_cx_root)  ##CATCH_ALL.
-        raise exception type zcx_bc_mail_send
-          exporting
+      CATCH cx_root INTO DATA(lo_cx_root)  ##CATCH_ALL.
+        RAISE EXCEPTION TYPE zcx_bc_mail_send
+          EXPORTING
             previous = lo_cx_root
             textid   = zcx_bc_mail_send=>cant_send.
 
-    endtry.
+    ENDTRY.
 
-  endmethod.
+  ENDMETHOD.
 
 
   METHOD send_symsg_as_email.

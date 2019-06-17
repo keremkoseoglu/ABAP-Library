@@ -12,7 +12,7 @@ CLASS zcl_sd_delivery DEFINITION
         customer TYPE REF TO zcl_sd_customer,
         btgew    TYPE likp-btgew,
         gewei    TYPE likp-gewei,
-        vstel    type likp-vstel,
+        vstel    TYPE likp-vstel,
       END OF t_head,
 
       BEGIN OF t_item,
@@ -21,11 +21,19 @@ CLASS zcl_sd_delivery DEFINITION
         werks       TYPE lips-werks,
         storage_loc TYPE REF TO zcl_sd_storage_location,
         stloc_cx    TYPE REF TO zcx_sd_stloc_def,
+        vgbel       TYPE lips-vgbel,
       END OF t_item,
 
       tt_item
         TYPE STANDARD TABLE OF t_item
-        WITH DEFAULT KEY.
+        WITH DEFAULT KEY,
+
+      BEGIN OF t_weight,
+        btgew TYPE likp-btgew,
+        gewei TYPE likp-gewei,
+      END OF t_weight,
+
+      tt_vbeln TYPE STANDARD TABLE OF vbeln WITH DEFAULT KEY.
 
     DATA:
       gs_head TYPE t_head.
@@ -34,40 +42,60 @@ CLASS zcl_sd_delivery DEFINITION
       get_instance
         IMPORTING !iv_vbeln     TYPE likp-vbeln
         RETURNING VALUE(ro_obj) TYPE REF TO zcl_sd_delivery
-        RAISING   zcx_sd_delivery_def.
+        RAISING   zcx_sd_delivery_def,
+
+      get_total_weight_of_deliveries
+        IMPORTING
+          !it_vbeln       TYPE tt_vbeln
+          !iv_gewei       TYPE likp-gewei
+        RETURNING
+          VALUE(rv_btgew) TYPE likp-btgew
+        RAISING
+          zcx_bc_function_subrc
+          zcx_sd_delivery_def.
 
     METHODS:
       attach_gos_doc
-        importing
-          !iv_filename    type clike
-          !iv_description type clike
-          !iv_hex_String  type xstring
+        IMPORTING
+          !iv_filename    TYPE clike
+          !iv_description TYPE clike
+          !iv_hex_string  TYPE xstring
         RAISING
           zcx_bc_gos_doc_attach,
 
       del_gos_doc
-        importing
-          !is_docid type SO_ENTRYID
-        raising
+        IMPORTING
+          !is_docid TYPE so_entryid
+        RAISING
           zcx_bc_gos_doc_delete,
 
       get_gos_docs
-        returning value(rt_doc) type zcl_Bc_gos_toolkit=>tt_doc_content
-        raising   zcx_bc_gos_doc_content,
+        RETURNING VALUE(rt_doc) TYPE zcl_bc_gos_toolkit=>tt_doc_content
+        RAISING   zcx_bc_gos_doc_content,
 
       get_items
-        RETURNING VALUE(rt_item) TYPE tt_item.
+        RETURNING VALUE(rt_item) TYPE tt_item,
+
+      get_orders RETURNING VALUE(rt_vbeln) TYPE tt_vbeln,
+
+      get_total_weight
+        RETURNING VALUE(rs_weight) TYPE t_weight
+        RAISING   zcx_bc_function_subrc.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
 
     TYPES:
       BEGIN OF t_lazy_flg,
-        item TYPE abap_bool,
+        item         TYPE abap_bool,
+        orders       TYPE abap_bool,
+        total_weight TYPE abap_bool,
       END OF t_lazy_flg,
 
       BEGIN OF t_lazy_val,
-        item TYPE tt_item,
+        item         TYPE tt_item,
+        orders       TYPE tt_vbeln,
+        total_weight TYPE t_weight,
       END OF t_lazy_val,
 
       BEGIN OF t_lazy,
@@ -85,8 +113,16 @@ CLASS zcl_sd_delivery DEFINITION
         TYPE HASHED TABLE OF t_multiton
         WITH UNIQUE KEY primary_key COMPONENTS vbeln.
 
-    constants:
-      c_gos_classname type bapibds01-classname value 'LIKP'.
+    CONSTANTS:
+      BEGIN OF c_pkstk,
+        completed TYPE pkstk VALUE 'C',
+      END OF c_pkstk,
+
+      BEGIN OF c_vpobj,
+        delivery TYPE vpobj VALUE '01',
+      END OF c_vpobj,
+
+      c_gos_classname TYPE bapibds01-classname VALUE 'LIKP'.
 
     CLASS-DATA:
       gt_multiton TYPE tt_multiton.
@@ -105,19 +141,19 @@ ENDCLASS.
 
 CLASS zcl_sd_delivery IMPLEMENTATION.
 
-  method attach_gos_doc.
+  METHOD attach_gos_doc.
 
     zcl_bc_gos_toolkit=>attach_doc(
       iv_filename    = iv_filename
       iv_description = iv_description
       iv_hex_string  = iv_hex_string
-      is_key = value #(
+      is_key = VALUE #(
         classname = c_gos_classname
         objkey    = gs_head-vbeln
       )
     ).
 
-  endmethod.
+  ENDMETHOD.
 
   METHOD constructor.
 
@@ -151,37 +187,37 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
 
   ENDMETHOD.
 
-  method del_gos_doc.
+  METHOD del_gos_doc.
 
-      zcl_bc_gos_toolkit=>delete_doc(
-        is_folder_id = VALUE #(
-          objtp = is_docid+0(3)
-          objyr = is_docid+3(2)
-          objno = is_docid+5(12)
-        )
-        is_object_id = VALUE #(
-          objtp = is_docid+17(3)
-          objyr = is_docid+20(2)
-          objno = is_docid+22(12)
-        )
-        is_key = value #(
-          classname = c_gos_classname
-          objkey    = gs_head-vbeln
-        )
-      ).
+    zcl_bc_gos_toolkit=>delete_doc(
+      is_folder_id = VALUE #(
+        objtp = is_docid+0(3)
+        objyr = is_docid+3(2)
+        objno = is_docid+5(12)
+      )
+      is_object_id = VALUE #(
+        objtp = is_docid+17(3)
+        objyr = is_docid+20(2)
+        objno = is_docid+22(12)
+      )
+      is_key = VALUE #(
+        classname = c_gos_classname
+        objkey    = gs_head-vbeln
+      )
+    ).
 
-  endmethod.
+  ENDMETHOD.
 
-  method get_gos_docs.
+  METHOD get_gos_docs.
 
     rt_doc = zcl_bc_gos_toolkit=>get_doc_content(
-      value #(
+      VALUE #(
          classname = c_gos_classname
          objkey    = gs_head-vbeln
       )
     ).
 
-  endmethod.
+  ENDMETHOD.
 
   METHOD get_instance.
 
@@ -217,7 +253,7 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
 
     IF gs_lazy-flg-item EQ abap_false.
 
-      SELECT posnr, lgort, werks
+      SELECT posnr, lgort, werks, vgbel
         FROM lips
         WHERE vbeln EQ @gs_head-vbeln
         INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-item
@@ -241,6 +277,120 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
     ENDIF.
 
     rt_item = gs_lazy-val-item.
+
+  ENDMETHOD.
+
+  METHOD get_orders.
+
+    IF gs_lazy-flg-orders IS INITIAL.
+
+      gs_lazy-val-orders = VALUE #(
+        FOR GROUPS _vgbel OF _item IN get_items( )
+        GROUP BY _item-vgbel
+        ( _vgbel )
+      ).
+
+      SORT gs_lazy-val-orders.
+      DELETE ADJACENT DUPLICATES FROM gs_lazy-val-orders.
+      DELETE gs_lazy-val-orders WHERE table_line IS INITIAL.
+
+      gs_lazy-flg-orders = abap_true.
+    ENDIF.
+
+    rt_vbeln = gs_lazy-val-orders.
+
+  ENDMETHOD.
+
+  METHOD get_total_weight.
+
+    IF gs_lazy-flg-total_weight IS INITIAL.
+
+      gs_lazy-val-total_weight-btgew = gs_head-btgew.
+      gs_lazy-val-total_weight-gewei = gs_head-gewei.
+
+      DATA(lv_vpobjkey) = CONV vpobjkey( gs_head-vbeln ).
+
+      SELECT tarag, gewei
+        FROM vekp
+        WHERE
+          vpobj    EQ @c_vpobj-delivery AND
+          vpobjkey EQ @lv_vpobjkey
+        INTO TABLE @DATA(lt_vekp).
+
+      LOOP AT lt_vekp ASSIGNING FIELD-SYMBOL(<ls_vekp>).
+        IF <ls_vekp>-gewei EQ gs_lazy-val-total_weight-gewei.
+          ADD <ls_vekp>-tarag TO gs_lazy-val-total_weight-btgew.
+        ELSE.
+          DATA(lv_tarag_in_likp_gewei) = CONV vekp-tarag( 0 ).
+
+          CALL FUNCTION 'UNIT_CONVERSION_SIMPLE'
+            EXPORTING
+              input                = <ls_vekp>-tarag
+              unit_in              = <ls_vekp>-gewei
+              unit_out             = gs_lazy-val-total_weight-gewei
+            IMPORTING
+              output               = lv_tarag_in_likp_gewei
+            EXCEPTIONS
+              conversion_not_found = 1
+              division_by_zero     = 2
+              input_invalid        = 3
+              output_invalid       = 4
+              overflow             = 5
+              type_invalid         = 6
+              units_missing        = 7
+              unit_in_not_found    = 8
+              unit_out_not_found   = 9
+              OTHERS               = 10
+              ##FM_SUBRC_OK.
+
+          zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'UNIT_CONVERSION_SIMPLE' ).
+          ADD lv_tarag_in_likp_gewei TO gs_lazy-val-total_weight-btgew.
+
+        ENDIF.
+
+      ENDLOOP.
+
+
+      gs_lazy-flg-total_weight = abap_true.
+    ENDIF.
+
+    rs_weight = gs_lazy-val-total_weight.
+
+  ENDMETHOD.
+
+  METHOD get_total_weight_of_deliveries.
+
+    LOOP AT it_vbeln ASSIGNING FIELD-SYMBOL(<lv_vbeln>).
+
+      DATA(ls_weight) = zcl_sd_delivery=>get_instance( <lv_vbeln> )->get_total_weight( ).
+
+      DATA(lv_dlv_weight_converted) = CONV likp-btgew( 0 ).
+
+      CALL FUNCTION 'UNIT_CONVERSION_SIMPLE'
+        EXPORTING
+          input                = ls_weight-btgew
+          unit_in              = ls_weight-gewei
+          unit_out             = iv_gewei
+        IMPORTING
+          output               = lv_dlv_weight_converted
+        EXCEPTIONS
+          conversion_not_found = 1
+          division_by_zero     = 2
+          input_invalid        = 3
+          output_invalid       = 4
+          overflow             = 5
+          type_invalid         = 6
+          units_missing        = 7
+          unit_in_not_found    = 8
+          unit_out_not_found   = 9
+          OTHERS               = 10
+          ##FM_SUBRC_OK.
+
+      zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'UNIT_CONVERSION_SIMPLE' ).
+
+      ADD lv_dlv_weight_converted TO rv_btgew.
+
+    ENDLOOP.
 
   ENDMETHOD.
 

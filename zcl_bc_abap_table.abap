@@ -84,6 +84,8 @@ CLASS zcl_bc_abap_table DEFINITION
         RETURNING VALUE(rs_dd03l) TYPE dd03l
         RAISING   zcx_bc_table_content,
 
+      get_field_count RETURNING VALUE(rv_count) TYPE i,
+
       get_fields RETURNING VALUE(rt_dd03l) TYPE tt_dd03l,
 
       get_included_tables
@@ -243,6 +245,10 @@ CLASS zcl_bc_abap_table IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD get_field_count.
+    read_fields_lazy( ).
+    rv_count = lines( gs_lazy-val-field ).
+  ENDMETHOD.
 
   METHOD get_fields.
     read_fields_lazy( ).

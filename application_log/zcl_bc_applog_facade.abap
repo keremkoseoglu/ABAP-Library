@@ -5,7 +5,7 @@ CLASS zcl_bc_applog_facade DEFINITION
 
   PUBLIC SECTION.
 
-    CONSTANTS c_clsname_me TYPE seoclsname VALUE 'ZCL_BC_APPLOG_FACADE'.
+    CONSTANTS c_clsname_me TYPE seoclsname VALUE 'ZCL_BC_APPLOG_FACADE' ##NO_TEXT.
     CONSTANTS c_def_preservation TYPE int4 VALUE 60 ##NO_TEXT.
     CONSTANTS c_msgty_a TYPE symsgty VALUE 'A' ##NO_TEXT.
     CONSTANTS c_msgty_e TYPE symsgty VALUE 'E' ##NO_TEXT.
@@ -17,7 +17,7 @@ CLASS zcl_bc_applog_facade DEFINITION
     CONSTANTS c_sign_i TYPE ddsign VALUE 'I' ##NO_TEXT.
     CONSTANTS c_sever_all TYPE zbcd_sever VALUE '' ##NO_TEXT.
     CONSTANTS c_sever_error TYPE zbcd_sever VALUE 'E' ##NO_TEXT.
-    CONSTANTS c_sever_lock TYPE zbcd_sever VALUE 'L'.
+    CONSTANTS c_sever_lock TYPE zbcd_sever VALUE 'L' ##NO_TEXT.
     CONSTANTS c_sever_warning TYPE zbcd_sever VALUE 'W' ##NO_TEXT.
     DATA gv_object TYPE balobj_d .
     DATA gv_subobject TYPE balsubobj .
@@ -35,7 +35,7 @@ CLASS zcl_bc_applog_facade DEFINITION
     METHODS add_bapiret2
       IMPORTING
         !it_bapiret2 TYPE bapiret2_tt
-        !iv_cumulate TYPE abap_bool DEFAULT abap_false.
+        !iv_cumulate TYPE abap_bool DEFAULT abap_false .
     METHODS add_bapireturn
       IMPORTING
         !it_bapireturn TYPE isi_bapireturn_tt .
@@ -45,21 +45,25 @@ CLASS zcl_bc_applog_facade DEFINITION
     METHODS add_bdcmsgcoll
       IMPORTING
         !it_bdcmsgcoll TYPE tab_bdcmsgcoll .
-
     METHODS add_bcsy_text
       IMPORTING
         !it_bcsy_text TYPE bcsy_text
-        !iv_msgty     TYPE symsgty DEFAULT c_msgty_s.
+        !iv_msgty     TYPE symsgty DEFAULT c_msgty_s .
+
+    METHODS add_deepest_exception
+      IMPORTING
+        !io_cx    TYPE REF TO cx_root
+        !iv_msgty TYPE symsgty DEFAULT c_msgty_e .
 
     METHODS add_exception
       IMPORTING
         !io_cx    TYPE REF TO cx_root
-        !iv_msgty TYPE symsgty DEFAULT c_msgty_e.
+        !iv_msgty TYPE symsgty DEFAULT c_msgty_e .
+
     METHODS add_free_text
       IMPORTING
         !iv_text  TYPE c
         !iv_msgty TYPE symsgty DEFAULT c_msgty_s .
-
     METHODS add_itab_fld_as_free_text
       IMPORTING
         !ir_tab   TYPE REF TO data
@@ -67,20 +71,19 @@ CLASS zcl_bc_applog_facade DEFINITION
         !iv_intro TYPE clike OPTIONAL
         !iv_msgty TYPE symsgty DEFAULT c_msgty_s
       RAISING
-        zcx_bc_class_method.
-
-    METHODS add_merrdat_f_tab IMPORTING !it_merrdat TYPE merrdat_f_tab.
-
-    METHODS add_string IMPORTING !iv_msg TYPE string.
-
+        zcx_bc_class_method .
+    METHODS add_merrdat_f_tab
+      IMPORTING
+        !it_merrdat TYPE merrdat_f_tab .
+    METHODS add_string
+      IMPORTING
+        !iv_msg TYPE string .
     METHODS add_swr
       IMPORTING
         !it_swr TYPE swr_msgtab .
-
     METHODS add_swr_messag
       IMPORTING
-        !it_swr TYPE sapi_msg_lines.
-
+        !it_swr TYPE sapi_msg_lines .
     METHODS add_sy_msg
       IMPORTING
         !iv_cumulate TYPE abap_bool DEFAULT abap_false .
@@ -93,7 +96,7 @@ CLASS zcl_bc_applog_facade DEFINITION
         !iv_msgv2    TYPE data OPTIONAL
         !iv_msgv3    TYPE data OPTIONAL
         !iv_msgv4    TYPE data OPTIONAL
-        !iv_cumulate TYPE abap_bool DEFAULT abap_false.
+        !iv_cumulate TYPE abap_bool DEFAULT abap_false .
     METHODS clear_log .
     METHODS constructor
       IMPORTING
@@ -113,6 +116,7 @@ CLASS zcl_bc_applog_facade DEFINITION
         !iv_msgty_s     TYPE flag DEFAULT abap_true
       RETURNING
         VALUE(rv_count) TYPE int4 .
+
     METHODS get_messages
       IMPORTING
         !iv_msgty_x        TYPE abap_bool DEFAULT abap_true
@@ -123,6 +127,19 @@ CLASS zcl_bc_applog_facade DEFINITION
         !iv_msgty_s        TYPE abap_bool DEFAULT abap_true
       RETURNING
         VALUE(rt_messages) TYPE bapiret2_t .
+
+    METHODS get_messages_as_json
+      IMPORTING
+        !iv_msgty_x    TYPE abap_bool DEFAULT abap_true
+        !iv_msgty_a    TYPE abap_bool DEFAULT abap_true
+        !iv_msgty_e    TYPE abap_bool DEFAULT abap_true
+        !iv_msgty_w    TYPE abap_bool DEFAULT abap_true
+        !iv_msgty_i    TYPE abap_bool DEFAULT abap_true
+        !iv_msgty_s    TYPE abap_bool DEFAULT abap_true
+        !iv_short      TYPE abap_bool DEFAULT abap_false
+      RETURNING
+        VALUE(rv_json) TYPE string.
+
     METHODS get_text_of_msgid
       IMPORTING
         VALUE(iv_cl)     TYPE sy-msgid
@@ -132,6 +149,11 @@ CLASS zcl_bc_applog_facade DEFINITION
     METHODS get_worst_severity
       RETURNING
         VALUE(rv_sever) TYPE zbcd_sever .
+    METHODS save_to_db_2th_connection
+      CHANGING
+        VALUE(cv_save_all) TYPE abap_bool DEFAULT abap_true
+      RAISING
+        zcx_bc_log_save .
     METHODS save_to_db
       IMPORTING
         !iv_commit         TYPE abap_bool DEFAULT abap_false
@@ -142,6 +164,9 @@ CLASS zcl_bc_applog_facade DEFINITION
     METHODS get_log_handle
       RETURNING
         VALUE(rv_log_handle) TYPE balloghndl .
+
+    METHODS add_mesg IMPORTING !it_mesg TYPE mesg_t.
+
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -252,6 +277,20 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
   ENDMETHOD. "ADD_BAPI_CORU_RETURN
 
 
+  METHOD add_bcsy_text.
+
+    LOOP AT it_bcsy_text ASSIGNING FIELD-SYMBOL(<ls_bt>).
+
+      add_free_text(
+        iv_text  = <ls_bt>-line
+        iv_msgty = iv_msgty
+      ).
+
+    ENDLOOP.
+
+  ENDMETHOD.
+
+
   METHOD add_bdcmsgcoll.
 
     LOOP AT it_bdcmsgcoll ASSIGNING FIELD-SYMBOL(<ls_bmc>).
@@ -267,18 +306,19 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
 
   ENDMETHOD. "ADD_BDCMSGCOLL
 
-  METHOD add_bcsy_text.
 
-    LOOP AT it_bcsy_text ASSIGNING FIELD-SYMBOL(<ls_bt>).
+  METHOD add_deepest_exception.
+    CHECK io_cx IS NOT INITIAL. " Paranoya
 
-      add_free_text(
-        iv_text  = <ls_bt>-line
-        iv_msgty = iv_msgty
-      ).
-
-    ENDLOOP.
-
+    IF io_cx->previous IS INITIAL.
+      add_exception( io_cx    = io_cx
+                     iv_msgty = iv_msgty ).
+    ELSE.
+      add_deepest_exception( io_cx    = io_cx->previous
+                             iv_msgty = iv_msgty ).
+    ENDIF.
   ENDMETHOD.
+
 
   METHOD add_exception.
 
@@ -378,6 +418,7 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD add_merrdat_f_tab.
 
     LOOP AT it_merrdat ASSIGNING FIELD-SYMBOL(<ls_merrdat>).
@@ -395,6 +436,7 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
     ENDLOOP.
 
   ENDMETHOD.
+
 
   METHOD add_string.
 
@@ -720,6 +762,56 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD get_messages_as_json.
+
+    DATA(messages_as_itab) = get_messages(
+               iv_msgty_x  = iv_msgty_x
+               iv_msgty_a  = iv_msgty_a
+               iv_msgty_e  = iv_msgty_e
+               iv_msgty_w  = iv_msgty_w
+               iv_msgty_i  = iv_msgty_i
+               iv_msgty_s  = iv_msgty_s ).
+
+    rv_json = '['.
+
+    LOOP AT messages_as_itab ASSIGNING FIELD-SYMBOL(<msg>).
+      IF sy-tabix > 1.
+        rv_json = |{ rv_json },|.
+      ENDIF.
+
+      IF iv_short EQ abap_true.
+        rv_json = |{ rv_json }| &&
+                  | \{ | &&
+                  |"type": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-type ) }", | &&
+                  |"id": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-id ) }", | &&
+                  |"number": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-number ) }", | &&
+                  |"message": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-message ) }" | &&
+                  | \}|.
+      ELSE.
+        rv_json = |{ rv_json }| &&
+                  | \{ | &&
+                  |"type": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-type ) }", | &&
+                  |"id": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-id ) }", | &&
+                  |"number": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-number ) }", | &&
+                  |"message": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-message ) }", | &&
+                  |"log_no": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-log_no ) }", | &&
+                  |"log_msg_no": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-log_msg_no ) }", | &&
+                  |"message_v1": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-message_v1 ) }", | &&
+                  |"message_v2": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-message_v2 ) }", | &&
+                  |"message_v3": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-message_v3 ) }", | &&
+                  |"message_v4": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-message_v4 ) }", | &&
+                  |"parameter": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-parameter ) }", | &&
+                  |"row": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-row ) }", | &&
+                  |"field": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-field ) }", | &&
+                  |"system": "{ zcl_bc_json_toolkit=>get_json_text( <msg>-system ) }" | &&
+                  | \}|.
+      ENDIF.
+    ENDLOOP.
+
+    rv_json = |{ rv_json }]|.
+  ENDMETHOD.
+
+
   METHOD get_message_count.
 
     rv_count = lines( get_messages( iv_msgty_x = iv_msgty_x
@@ -811,4 +903,46 @@ CLASS zcl_bc_applog_facade IMPLEMENTATION.
     ENDIF.
 
   ENDMETHOD. "save_to_db
+
+
+  METHOD save_to_db_2th_connection.
+
+    DATA lt_log_handle TYPE bal_t_logh.
+
+
+    APPEND gv_log_handle TO lt_log_handle.
+
+    CALL FUNCTION 'BAL_DB_SAVE'
+      EXPORTING
+        i_in_update_task     = abap_false
+        i_save_all           = cv_save_all
+        i_t_log_handle       = lt_log_handle
+        i_2th_connection     = abap_true
+        i_2th_connect_commit = abap_true
+      EXCEPTIONS
+        log_not_found        = 1
+        save_not_allowed     = 2
+        numbering_error      = 3
+        OTHERS               = 4.
+
+    IF sy-subrc NE 0.
+      RAISE EXCEPTION TYPE zcx_bc_log_save
+        EXPORTING
+          textid    = zcx_bc_log_save=>cant_save
+          object    = gv_object
+          subobject = gv_subobject
+          previous  = zcx_bc_symsg=>get_instance( ).
+    ENDIF.
+
+
+  ENDMETHOD. "save_to_db
+
+
+  METHOD add_mesg.
+    LOOP AT it_mesg ASSIGNING FIELD-SYMBOL(<mesg>).
+      add_free_text( iv_text  = <mesg>-text
+                     iv_msgty = <mesg>-msgty ).
+    ENDLOOP.
+  ENDMETHOD.
+
 ENDCLASS.

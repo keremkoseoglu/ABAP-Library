@@ -23,14 +23,13 @@ CLASS zcl_fi_duplicate_doc_check DEFINITION
 
       tt_doc_item TYPE STANDARD TABLE OF t_doc_item WITH DEFAULT KEY.
 
-    METHODS:
-      execute
-        IMPORTING
-          !is_doc_head TYPE t_doc_head
-          !it_doc_item TYPE tt_doc_item
-          !iv_tcode    TYPE sytcode DEFAULT sy-tcode
-        RAISING
-          zcx_fi_duplicate_doc.
+    METHODS execute
+      IMPORTING
+        !is_doc_head TYPE t_doc_head
+        !it_doc_item TYPE tt_doc_item
+        !iv_tcode    TYPE sytcode DEFAULT sy-tcode
+      RAISING
+        zcx_fi_duplicate_doc.
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -56,27 +55,20 @@ CLASS zcl_fi_duplicate_doc_check DEFINITION
 
     DATA gs_state TYPE t_state.
 
-    METHODS:
+    METHODS check_duplicate
+      IMPORTING !is_item TYPE t_doc_item
+      RAISING   zcx_bc_table_content
+                zcx_fi_duplicate_doc.
 
-      check_duplicate
-        IMPORTING
-          !is_item TYPE t_doc_item
-        RAISING
-          zcx_bc_table_content
-          zcx_fi_duplicate_doc,
-
-      check_duplicates RAISING zcx_fi_duplicate_doc,
-      filter_items.
+    METHODS check_duplicates RAISING zcx_fi_duplicate_doc.
+    METHODS filter_items.
 ENDCLASS.
 
 
 
 CLASS zcl_fi_duplicate_doc_check IMPLEMENTATION.
-
-
   METHOD check_duplicate.
-
-    DATA: lv_stblg_mm TYPE re_stblg. "Ters kayıt belge numarası
+    DATA lv_stblg_mm TYPE re_stblg. "Ters kayıt belge numarası
 
     " ______________________________
     " Ön kontroller
@@ -92,53 +84,69 @@ CLASS zcl_fi_duplicate_doc_check IMPLEMENTATION.
     " ______________________________
     " Önceki adımda bulunan VKN’ye sahip satıcıların
     " Mükerrer belgelere ilişkin satıcı kontrol endeks belgeleri seçilir
-    SELECT bsip~belnr, bsip~gjahr, bsip~buzei, bkpf~awtyp, bkpf~awkey, bkpf~stblg
-      FROM lfa1
-      INNER JOIN bsip ON bsip~lifnr EQ lfa1~lifnr
-      INNER JOIN bkpf ON bkpf~bukrs EQ bsip~bukrs
-                      AND bkpf~belnr EQ bsip~belnr
-                      AND bkpf~gjahr EQ bsip~gjahr
-      INTO TABLE @DATA(lt_mukerrer)
-      WHERE lfa1~stcd2 EQ @lv_vkn
-        AND bsip~bukrs EQ @gs_state-head-bukrs
-        AND bsip~xblnr EQ @gs_state-head-xblnr.
 
-    DELETE lt_mukerrer WHERE belnr EQ gs_state-head-belnr
-                         AND gjahr EQ gs_state-head-gjahr.
+    SELECT bsik~belnr, bsik~gjahr, bsik~buzei, bkpf~awtyp, bkpf~awkey, bkpf~stblg
+           FROM lfa1
+           INNER JOIN bsik ON bsik~lifnr = lfa1~lifnr
+           INNER JOIN bkpf ON bkpf~bukrs = bsik~bukrs AND
+                              bkpf~belnr = bsik~belnr AND
+                              bkpf~gjahr = bsik~gjahr
+           WHERE lfa1~stcd2 = @lv_vkn AND
+                 bsik~bukrs = @gs_state-head-bukrs AND
+                 bsik~xblnr = @gs_state-head-xblnr AND
+                 ( NOT ( bsik~belnr = @gs_state-head-belnr AND
+                         bsik~gjahr = @gs_state-head-gjahr ) )
+           INTO TABLE @DATA(lt_mukerrer).
+
+    SELECT bsak~belnr, bsak~gjahr, bsak~buzei, bkpf~awtyp, bkpf~awkey, bkpf~stblg
+           FROM lfa1
+           INNER JOIN bsak ON bsak~lifnr = lfa1~lifnr
+           INNER JOIN bkpf ON bkpf~bukrs = bsak~bukrs AND
+                              bkpf~belnr = bsak~belnr AND
+                              bkpf~gjahr = bsak~gjahr
+           WHERE lfa1~stcd2 = @lv_vkn AND
+                 bsak~bukrs = @gs_state-head-bukrs AND
+                 bsak~xblnr = @gs_state-head-xblnr AND
+                 ( NOT ( bsak~belnr = @gs_state-head-belnr AND
+                         bsak~gjahr = @gs_state-head-gjahr ) )
+           APPENDING CORRESPONDING FIELDS OF TABLE @lt_mukerrer.
 
     LOOP AT lt_mukerrer ASSIGNING FIELD-SYMBOL(<ls_mukerrer>).
-
       CLEAR lv_stblg_mm.
 
-      IF <ls_mukerrer>-awtyp EQ c_fat_giris.
+      IF <ls_mukerrer>-awtyp = c_fat_giris.
         "Orjinal MM belgesi ters kaydı alınmış mı kontrolü
-        SELECT SINGLE stblg INTO lv_stblg_mm FROM rbkp
-             WHERE belnr = <ls_mukerrer>-awkey(10)
-               AND gjahr = <ls_mukerrer>-awkey+10.
+        SELECT SINGLE stblg FROM rbkp
+             WHERE belnr = @<ls_mukerrer>-awkey(10) AND
+                   gjahr = @<ls_mukerrer>-awkey+10
+             INTO @lv_stblg_mm .
       ENDIF.
 
-
       " Muhasebe belgesi veya mm belgesinin ters kaydı alınmışsa mukerrer belge listesinden çıkar.
-
-      IF lv_stblg_mm IS NOT INITIAL OR
-         <ls_mukerrer>-stblg IS NOT INITIAL.
+      IF lv_stblg_mm IS NOT INITIAL OR <ls_mukerrer>-stblg IS NOT INITIAL.
         DELETE lt_mukerrer.
         CONTINUE.
       ENDIF.
-
     ENDLOOP.
 
     IF lt_mukerrer IS INITIAL.
       RETURN.
     ENDIF.
 
-    SELECT belnr,gjahr FROM bseg INTO TABLE @DATA(lt_belge)
-      FOR ALL ENTRIES IN @lt_mukerrer
-      WHERE bukrs EQ @gs_state-head-bukrs
-        AND belnr EQ @lt_mukerrer-belnr
-        AND gjahr EQ @lt_mukerrer-gjahr
-        AND buzei EQ @lt_mukerrer-buzei
-        AND gsber EQ @is_item-gsber.                    "#EC CI_NOORDER
+    IF is_item-gsber IS NOT INITIAL.
+      DATA(lt_gsber_rng) =  VALUE range_gsber_in_t( ( sign   = zcl_bc_ddic_toolkit=>c_sign_i
+                                                      option = zcl_bc_ddic_toolkit=>c_option_eq
+                                                      low    = is_item-gsber ) ).
+    ENDIF.
+
+    SELECT belnr,gjahr FROM bseg
+           FOR ALL ENTRIES IN @lt_mukerrer
+           WHERE bukrs = @gs_state-head-bukrs AND
+                 belnr = @lt_mukerrer-belnr AND
+                 gjahr = @lt_mukerrer-gjahr AND
+                 buzei = @lt_mukerrer-buzei AND
+                 gsber IN @lt_gsber_rng
+           INTO TABLE @DATA(lt_belge).                  "#EC CI_NOORDER
 
     IF lt_belge IS INITIAL.
       RETURN.
@@ -154,46 +162,39 @@ CLASS zcl_fi_duplicate_doc_check IMPLEMENTATION.
         bukrs = gs_state-head-bukrs
         belnr = <ls_belge>-belnr
         gjahr = <ls_belge>-gjahr.
-
   ENDMETHOD.
 
 
   METHOD check_duplicates.
-
     LOOP AT gs_state-item_filtered ASSIGNING FIELD-SYMBOL(<ls_if>).
-
       TRY.
           check_duplicate( <ls_if> ).
         CATCH zcx_bc_table_content ##no_handler .
       ENDTRY.
-
     ENDLOOP.
-
   ENDMETHOD.
 
 
   METHOD execute.
-    DATA: lr_usnam TYPE RANGE OF usnam.
+    DATA lr_usnam TYPE RANGE OF usnam.
 
-    CHECK NOT (
-        iv_tcode EQ c_tcode_fb08 OR
-        iv_tcode EQ c_tcode_f80  OR
-        iv_tcode EQ c_tcode_mr8m OR
-        iv_tcode EQ c_tcode_fbra
-    ).
+    CHECK NOT ( iv_tcode = c_tcode_fb08 OR
+                iv_tcode = c_tcode_f80  OR
+                iv_tcode = c_tcode_mr8m OR
+                iv_tcode = c_tcode_fbra ).
 
-    SELECT * FROM setleaf INTO TABLE @DATA(lt_setleaf)
-      WHERE setclass EQ @c_setclass
-        AND subclass EQ @c_subclass
-        AND setname  EQ @c_setname.
+    SELECT valsign, valoption, valfrom, valto
+           FROM setleaf
+           WHERE setclass = @c_setclass AND
+                 subclass = @c_subclass AND
+                 setname  = @c_setname
+           INTO TABLE @DATA(lt_setleaf).
 
-    LOOP AT lt_setleaf ASSIGNING FIELD-SYMBOL(<ls_setleaf>).
-      APPEND INITIAL LINE TO lr_usnam REFERENCE INTO DATA(lrv_usnam).
-      lrv_usnam->sign   = <ls_setleaf>-valsign.
-      lrv_usnam->option = <ls_setleaf>-valoption.
-      lrv_usnam->low    = <ls_setleaf>-valfrom.
-      lrv_usnam->high   = <ls_setleaf>-valto.
-    ENDLOOP.
+    lr_usnam = CORRESPONDING #( lt_setleaf MAPPING
+                                sign   = valsign
+                                option = valoption
+                                low    = valfrom
+                                high   = valto ).
 
     IF lr_usnam IS NOT INITIAL AND
        sy-uname IN lr_usnam.
@@ -206,7 +207,6 @@ CLASS zcl_fi_duplicate_doc_check IMPLEMENTATION.
 
     filter_items( ).
     check_duplicates( ).
-
   ENDMETHOD.
 
 
@@ -215,11 +215,9 @@ CLASS zcl_fi_duplicate_doc_check IMPLEMENTATION.
     " ______________________________
     " Sadece satıcı kalemlerini istiyoruz
 
-    gs_state-item_filtered = VALUE #(
-        FOR ls_item IN gs_state-item
-        WHERE ( koart EQ c_koart_satici_kalemi )
-        ( CORRESPONDING #( ls_item ) )
-    ).
+    gs_state-item_filtered = VALUE #( FOR ls_item IN gs_state-item
+                                      WHERE ( koart = c_koart_satici_kalemi )
+                                      ( CORRESPONDING #( ls_item ) ) ).
 
     IF gs_state-item_filtered IS INITIAL.
       RETURN.
@@ -228,25 +226,21 @@ CLASS zcl_fi_duplicate_doc_check IMPLEMENTATION.
     " ______________________________
     " Sadece satış ilişkili kayıt anahtarlarını istiyoruz
 
-    zcl_fi_posting_key=>cache( VALUE #(
-        FOR ls_if IN gs_state-item_filtered
-        ( ls_if-bschl )
-    ) ).
+    zcl_fi_posting_key=>cache( VALUE #( FOR ls_if IN gs_state-item_filtered
+                                        ( ls_if-bschl ) ) ).
 
     LOOP AT gs_state-item_filtered ASSIGNING FIELD-SYMBOL(<ls_if>).
-
       DATA(lv_del) = abap_false.
 
       TRY.
-          lv_del = xsdbool( zcl_fi_posting_key=>get_instance( <ls_if>-bschl )->gs_def-xumsw EQ abap_false ).
+          lv_del = xsdbool( zcl_fi_posting_key=>get_instance( <ls_if>-bschl )->gs_def-xumsw = abap_false ).
         CATCH zcx_bc_table_content.
           lv_del = abap_true.
       ENDTRY.
 
-      CHECK lv_del EQ abap_true.
+      CHECK lv_del = abap_true.
       DELETE gs_state-item_filtered.
       CONTINUE.
-
     ENDLOOP.
 
     IF gs_state-item_filtered IS INITIAL.
@@ -257,28 +251,22 @@ CLASS zcl_fi_duplicate_doc_check IMPLEMENTATION.
     " Sadece çift kayıt kontrolü etkin satıcıları istiyoruz
 
     LOOP AT gs_state-item_filtered ASSIGNING <ls_if>.
-
       lv_del = abap_false.
 
       TRY.
-
-          lv_del = xsdbool(
-              zcl_mm_vendor=>get_instance(
-                      <ls_if>-lifnr
-                  )->get_company_code_data(
-                      gs_state-head-bukrs
-                  )-reprf EQ abap_false
-          ).
+          lv_del = xsdbool( zcl_mm_vendor=>get_instance(
+                                <ls_if>-lifnr
+                            )->get_company_code_data(
+                                gs_state-head-bukrs
+                            )-reprf = abap_false ).
 
         CATCH zcx_bc_table_content.
           lv_del = abap_true.
       ENDTRY.
 
-      CHECK lv_del EQ abap_true.
+      CHECK lv_del = abap_true.
       DELETE gs_state-item_filtered.
       CONTINUE.
-
     ENDLOOP.
-
   ENDMETHOD.
 ENDCLASS.

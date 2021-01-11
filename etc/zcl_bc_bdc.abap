@@ -6,9 +6,11 @@ CLASS zcl_bc_bdc DEFINITION
   PUBLIC SECTION.
 
     CONSTANTS:
-      c_dismode_all   TYPE ctu_mode VALUE 'A',
-      c_dismode_error TYPE ctu_mode VALUE 'E',
-      c_dismode_none  TYPE ctu_mode VALUE 'N'.
+      c_dismode_all   TYPE ctu_mode VALUE ycl_addict_bdc=>dismode-all,
+      c_dismode_error TYPE ctu_mode VALUE ycl_addict_bdc=>dismode-error,
+      c_dismode_none  TYPE ctu_mode VALUE ycl_addict_bdc=>dismode-none.
+
+    METHODS constructor.
 
     METHODS add_fld
       IMPORTING
@@ -47,102 +49,73 @@ CLASS zcl_bc_bdc DEFINITION
 
   PROTECTED SECTION.
   PRIVATE SECTION.
-
-    DATA gt_bdcdata TYPE bdcdata_tab.
+    DATA core TYPE REF TO ycl_addict_bdc.
 
 ENDCLASS.
 
 
 
-CLASS ZCL_BC_BDC IMPLEMENTATION.
+CLASS zcl_bc_bdc IMPLEMENTATION.
+  METHOD constructor.
+    me->core = NEW #( ).
+  ENDMETHOD.
 
 
   METHOD add_fld.
-    APPEND VALUE #( fnam = iv_nam fval = iv_val ) TO gt_bdcdata.
+    me->core->add_fld(
+        nam = iv_nam
+        val = iv_val ).
   ENDMETHOD.
 
 
   METHOD add_scr.
-    APPEND VALUE #( program = iv_prg dynpro = iv_dyn dynbegin = abap_true ) TO gt_bdcdata.
+    me->core->add_scr(
+        prg = iv_prg
+        dyn = iv_dyn ).
   ENDMETHOD.
 
 
   METHOD clear.
-    CLEAR gt_bdcdata[].
+    me->core->clear( ).
   ENDMETHOD.
 
 
   METHOD close_group.
-
-    CALL FUNCTION 'BDC_CLOSE_GROUP'
-      EXCEPTIONS
-        not_open    = 1
-        queue_error = 2
-        OTHERS      = 3
-      ##FM_SUBRC_OK.
-
-    zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'BDC_CLOSE_GROUP' ).
-
-    clear(  ).
-
+    TRY.
+        me->core->close_group( ).
+      CATCH ycx_addict_function_subrc INTO DATA(error).
+        zcx_bc_function_subrc=>raise_from_addict( error ).
+    ENDTRY.
   ENDMETHOD.
 
 
   METHOD insert_tcode.
-
-    CALL FUNCTION 'BDC_INSERT'
-      EXPORTING
-        tcode            = iv_tcode
-      TABLES
-        dynprotab        = gt_bdcdata
-      EXCEPTIONS
-        internal_error   = 1
-        not_open         = 2
-        queue_error      = 3
-        tcode_invalid    = 4
-        printing_invalid = 5
-        posting_invalid  = 6
-        OTHERS           = 7
-      ##FM_SUBRC_OK.
-
-    zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'BDC_INSERT' ).
-
-    clear( ).
-
+    TRY.
+        me->core->insert_tcode( iv_tcode ).
+      CATCH ycx_addict_function_subrc INTO DATA(error).
+        zcx_bc_function_subrc=>raise_from_addict( error ).
+    ENDTRY.
   ENDMETHOD.
 
 
   METHOD open_group.
-    CALL FUNCTION 'BDC_OPEN_GROUP'
-      EXPORTING
-        group               = iv_group
-        keep                = abap_true
-        user                = sy-uname
-      EXCEPTIONS
-        client_invalid      = 1
-        destination_invalid = 2
-        group_invalid       = 3
-        group_is_locked     = 4
-        holddate_invalid    = 5
-        internal_error      = 6
-        queue_error         = 7
-        running             = 8
-        system_lock_error   = 9
-        user_invalid        = 10
-        OTHERS              = 11
-      ##FM_SUBRC_OK.
-
-    zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'BDC_OPEN_GROUP' ).
-
+    TRY.
+        me->core->open_group( iv_group ).
+      CATCH ycx_addict_function_subrc INTO DATA(error).
+        zcx_bc_function_subrc=>raise_from_addict( error ).
+    ENDTRY.
   ENDMETHOD.
 
 
   METHOD submit.
+    TRY.
+        me->core->submit(
+          EXPORTING tcode  = iv_tcode
+                    option = is_option
+          IMPORTING msg    = et_msg ).
 
-    CALL TRANSACTION iv_tcode
-         USING gt_bdcdata
-         MESSAGES INTO et_msg
-         OPTIONS FROM is_option.
-
+      CATCH ycx_addict_bdc ##no_handler.
+        " validate_msg yollamadığımız için, bu hata asla oluşmayacak
+    ENDTRY.
   ENDMETHOD.
 ENDCLASS.

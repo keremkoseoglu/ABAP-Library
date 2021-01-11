@@ -1,121 +1,123 @@
-class ZCL_BC_DDIC_TOOLKIT definition
-  public
-  final
-  create public .
+CLASS zcl_bc_ddic_toolkit DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
 
-public section.
+  PUBLIC SECTION.
+    TYPES tt_tabfld TYPE zcl_bc_abap_table=>tt_tabfld .
 
-  types TT_TABFLD type ZCL_BC_ABAP_TABLE=>TT_TABFLD .
+    CONSTANTS c_fieldname_high   TYPE fieldname VALUE ycl_addict_toolkit=>field-high.
+    CONSTANTS c_fieldname_low    TYPE fieldname VALUE ycl_addict_toolkit=>field-low.
+    CONSTANTS c_fieldname_option TYPE fieldname VALUE ycl_addict_toolkit=>field-option.
+    CONSTANTS c_fieldname_sign   TYPE fieldname VALUE ycl_addict_toolkit=>field-sign.
 
-  constants C_FIELDNAME_HIGH type FIELDNAME value 'HIGH' ##NO_TEXT.
-  constants C_FIELDNAME_LOW type FIELDNAME value 'LOW' ##NO_TEXT.
-  constants C_FIELDNAME_OPTION type FIELDNAME value 'OPTION' ##NO_TEXT.
-  constants C_FIELDNAME_SIGN type FIELDNAME value 'SIGN' ##NO_TEXT.
-  constants C_OPTION_BT type DDOPTION value 'BT' ##NO_TEXT.
-  constants C_OPTION_CP type DDOPTION value 'CP' ##NO_TEXT.
-  constants C_OPTION_EQ type DDOPTION value 'EQ' ##NO_TEXT.
-  constants C_OPTION_GE type DDOPTION value 'GE' ##NO_TEXT.
-  constants C_OPTION_LE type DDOPTION value 'LE' ##NO_TEXT.
-  constants C_OPTION_NE type DDOPTION value 'NE' ##NO_TEXT.
-  constants C_ROLLNAME_OPTION type ROLLNAME value 'DDOPTION' ##NO_TEXT.
-  constants C_ROLLNAME_SIGN type ROLLNAME value 'DDSIGN' ##NO_TEXT.
-  constants C_SIGN_E type DDSIGN value 'E' ##NO_TEXT.
-  constants C_SIGN_I type DDSIGN value 'I' ##NO_TEXT.
+    CONSTANTS c_option_bt TYPE ddoption VALUE ycl_addict_toolkit=>option-bt.
+    CONSTANTS c_option_cp TYPE ddoption VALUE ycl_addict_toolkit=>option-cp.
+    CONSTANTS c_option_eq TYPE ddoption VALUE ycl_addict_toolkit=>option-eq.
+    CONSTANTS c_option_ge TYPE ddoption VALUE ycl_addict_toolkit=>option-ge.
+    CONSTANTS c_option_le TYPE ddoption VALUE ycl_addict_toolkit=>option-le.
+    CONSTANTS c_option_ne TYPE ddoption VALUE ycl_addict_toolkit=>option-ne.
 
-  class-methods ALPHA_INPUT
-    importing
-      !IV_INPUT type ANY
-    exporting
-      !EV_OUTPUT type ANY .
-  class-methods ALPHA_INPUT_CHANGE
-    changing
-      value(C_FIELD) type ANY .
-  class-methods ALPHA_OUTPUT
-    importing
-      !IV_INPUT type ANY
-    exporting
-      value(EV_OUTPUT) type ANY .
-  class-methods CHAR_TO_DEC2
-    importing
-      !IV_CHAR type CHAR20
-    returning
-      value(RV_DEC) type DMBTR .
-  class-methods CHAR_TO_DEC3
-    importing
-      !IV_CHAR type CHAR20
-    returning
-      value(RV_DEC) type MENGE_D .
-  class-methods CONV_10DIGITDATE_TO_8DIGITDATE
-    importing
-      !IV_DATE type ANY
-    returning
-      value(RV_DATE) type DATUM .
-  class-methods CUNIT_INPUT
-    importing
-      !IV_MEINS type MEINS
-    returning
-      value(RV_MEINS) type MEINS .
-  class-methods CUNIT_OUTPUT
-    importing
-      !IV_MEINS type MEINS
-    returning
-      value(RV_MEINS) type MEINS .
-  class-methods DECIMAL_TO_CHAR_FOR_VBAP_FIELD
-    importing
-      !IV_DECIMAL type ZSDD_VBAP_MENGE
-    changing
-      !CV_CHAR type ANY .
-  class-methods ENSURE_ALL_WA_FIELDS_FULL
-    importing
-      !IR_WA type ref to DATA
-      !IV_STRUCTURE type TABNAME
-      !IV_WA_VARIABLE_NAME type STRING optional
-      !IV_FORGIVE_MISSING_STR_FLD type ABAP_BOOL default ABAP_FALSE
-    raising
-      ZCX_BC_FIELD_VALUE
-      ZCX_BC_METHOD_PARAMETER
-      ZCX_BC_VARIABLE .
-  class-methods FLOAT_TO_CHAR
-    importing
-      !IV_FLOAT type ATFLV
-    returning
-      value(RV_CHAR) type ATNAM .
-  class-methods GET_ROLLNAME_PAIRS
-    importing
-      !IV_TABNAME1 type TABNAME
-      !IV_TABNAME2 type TABNAME
-    returning
-      value(RT_RET) type ZBCTT_ROLLNAME_PAIR
-    raising
-      ZCX_BC_TABLE_CONTENT .
-  class-methods GET_TABLE_FIELDS
-    importing
-      !IV_TABNAME type TABNAME
-    returning
-      value(RT_FLD) type TT_TABFLD
-    raising
-      ZCX_BC_TABLE_CONTENT .
-  class-methods MATNR_INPUT
-    importing
-      !IV_MATNR type CLIKE
-    returning
-      value(RV_MATNR) type MATNR .
-  class-methods MATNR_OUTPUT
-    importing
-      !IV_MATNR type MATNR
-    returning
-      value(RV_MATNR) type MATNR .
-  class-methods VBELN_INPUT
-    importing
-      !IV_VBELN type CLIKE
-    returning
-      value(RV_VBELN) type VBELN_VL .
-  class-methods DOMAIN_VALUE_GET
-    importing
-      !IV_DOMNAME type DD07V-DOMNAME
-      !IV_DOMVALUE type DD07V-DOMVALUE_L
-    returning
-      value(RV_DDTEXT) type DD07V-DDTEXT .
+    CONSTANTS c_rollname_option TYPE rollname VALUE ycl_addict_toolkit=>rollname-option.
+    CONSTANTS c_rollname_sign   TYPE rollname VALUE ycl_addict_toolkit=>rollname-sign.
+
+    CONSTANTS c_sign_e TYPE ddsign VALUE ycl_addict_toolkit=>sign-exclude.
+    CONSTANTS c_sign_i TYPE ddsign VALUE ycl_addict_toolkit=>sign-include.
+
+    CLASS-METHODS alpha_input
+      IMPORTING
+        !iv_input  TYPE any
+      EXPORTING
+        !ev_output TYPE any .
+    CLASS-METHODS alpha_input_change
+      CHANGING
+        VALUE(c_field) TYPE any .
+    CLASS-METHODS alpha_output
+      IMPORTING
+        !iv_input        TYPE any
+      EXPORTING
+        VALUE(ev_output) TYPE any .
+    CLASS-METHODS char_to_dec2
+      IMPORTING
+        !iv_char      TYPE char20
+      RETURNING
+        VALUE(rv_dec) TYPE dmbtr .
+    CLASS-METHODS char_to_dec3
+      IMPORTING
+        !iv_char      TYPE char20
+      RETURNING
+        VALUE(rv_dec) TYPE menge_d .
+    CLASS-METHODS conv_10digitdate_to_8digitdate
+      IMPORTING
+        !iv_date       TYPE any
+      RETURNING
+        VALUE(rv_date) TYPE datum .
+    CLASS-METHODS cunit_input
+      IMPORTING
+        !iv_meins       TYPE meins
+      RETURNING
+        VALUE(rv_meins) TYPE meins .
+    CLASS-METHODS cunit_output
+      IMPORTING
+        !iv_meins       TYPE meins
+      RETURNING
+        VALUE(rv_meins) TYPE meins .
+    CLASS-METHODS decimal_to_char_for_vbap_field
+      IMPORTING
+        !iv_decimal TYPE zsdd_vbap_menge
+      CHANGING
+        !cv_char    TYPE any .
+    CLASS-METHODS ensure_all_wa_fields_full
+      IMPORTING
+        !ir_wa                      TYPE REF TO data
+        !iv_structure               TYPE tabname
+        !iv_wa_variable_name        TYPE string OPTIONAL
+        !iv_forgive_missing_str_fld TYPE abap_bool DEFAULT abap_false
+      RAISING
+        zcx_bc_field_value
+        zcx_bc_method_parameter
+        zcx_bc_variable .
+    CLASS-METHODS float_to_char
+      IMPORTING
+        !iv_float      TYPE atflv
+      RETURNING
+        VALUE(rv_char) TYPE atnam .
+    CLASS-METHODS get_rollname_pairs
+      IMPORTING
+        !iv_tabname1  TYPE tabname
+        !iv_tabname2  TYPE tabname
+      RETURNING
+        VALUE(rt_ret) TYPE zbctt_rollname_pair
+      RAISING
+        zcx_bc_table_content .
+    CLASS-METHODS get_table_fields
+      IMPORTING
+        !iv_tabname   TYPE tabname
+      RETURNING
+        VALUE(rt_fld) TYPE tt_tabfld
+      RAISING
+        zcx_bc_table_content .
+    CLASS-METHODS matnr_input
+      IMPORTING
+        !iv_matnr       TYPE clike
+      RETURNING
+        VALUE(rv_matnr) TYPE matnr .
+    CLASS-METHODS matnr_output
+      IMPORTING
+        !iv_matnr       TYPE matnr
+      RETURNING
+        VALUE(rv_matnr) TYPE matnr .
+    CLASS-METHODS vbeln_input
+      IMPORTING
+        !iv_vbeln       TYPE clike
+      RETURNING
+        VALUE(rv_vbeln) TYPE vbeln_vl .
+    CLASS-METHODS domain_value_get
+      IMPORTING
+        !iv_domname      TYPE dd07v-domname
+        !iv_domvalue     TYPE dd07v-domvalue_l
+      RETURNING
+        VALUE(rv_ddtext) TYPE dd07v-ddtext .
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -128,7 +130,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_BC_DDIC_TOOLKIT IMPLEMENTATION.
+CLASS zcl_bc_ddic_toolkit IMPLEMENTATION.
 
 
   METHOD alpha_input.
@@ -457,13 +459,13 @@ CLASS ZCL_BC_DDIC_TOOLKIT IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD VBELN_INPUT.
+  METHOD vbeln_input.
 
     CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
       EXPORTING
-        input        = iv_vbeln
+        input  = iv_vbeln
       IMPORTING
-        output       = rv_vbeln.
+        output = rv_vbeln.
 
   ENDMETHOD.
 

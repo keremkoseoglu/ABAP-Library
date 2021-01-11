@@ -11,14 +11,6 @@ CLASS zcl_mm_vendor DEFINITION
 
     DATA gs_def TYPE lfa1.
 
-    METHODS:
-      get_adrc RETURNING VALUE(rs_adrc) TYPE adrc,
-
-      get_company_code_data
-        IMPORTING !iv_bukrs    TYPE bukrs
-        RETURNING VALUE(rs_cc) TYPE lfb1
-        RAISING   zcx_bc_table_content.
-
     CLASS-METHODS:
       cache_itab_multiton
         IMPORTING
@@ -57,9 +49,26 @@ CLASS zcl_mm_vendor DEFINITION
         RETURNING VALUE(ro_obj) TYPE REF TO zcl_mm_vendor
         RAISING   zcx_bc_table_content,
 
+      get_instance_by_tax_code
+        IMPORTING !stcd2        TYPE stcd2
+        RETURNING VALUE(output) TYPE REF TO zcl_mm_vendor
+        RAISING   zcx_bc_table_content,
+
       get_lfa1
         IMPORTING !iv_lifnr      TYPE lifnr
-        RETURNING VALUE(rs_lfa1) TYPE lfa1 .
+        RETURNING VALUE(rs_lfa1) TYPE lfa1,
+
+      get_name1_safe
+        IMPORTING !iv_lifnr       TYPE lifnr
+        RETURNING VALUE(rv_name1) TYPE lfa1-name1.
+
+    METHODS:
+      get_adrc RETURNING VALUE(rs_adrc) TYPE adrc,
+
+      get_company_code_data
+        IMPORTING !iv_bukrs    TYPE bukrs
+        RETURNING VALUE(rs_cc) TYPE lfb1
+        RAISING   zcx_bc_table_content.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -115,9 +124,18 @@ CLASS zcl_mm_vendor DEFINITION
 
       tt_mt TYPE HASHED TABLE OF t_mt WITH UNIQUE KEY primary_key COMPONENTS lifnr.
 
+    TYPES: BEGIN OF tax_multiton_dict,
+             stcd2 TYPE lfa1-stcd2,
+             obj   TYPE REF TO zcl_mm_vendor,
+             cx    TYPE REF TO zcx_bc_table_content,
+           END OF tax_multiton_dict,
+
+           tax_multiton_set TYPE HASHED TABLE OF tax_multiton_dict
+                            WITH UNIQUE KEY primary_key COMPONENTS stcd2.
+
     CONSTANTS:
       c_clsname_me            TYPE seoclsname VALUE 'ZCL_MM_VENDOR',
-      c_meth_cim              type seocpdname value 'CACHE_ITAB_MULTITON',
+      c_meth_cim              TYPE seocpdname VALUE 'CACHE_ITAB_MULTITON',
       c_meth_ciwccd           TYPE seocpdname VALUE 'CACHE_ITAB_WITH_COMP_CODE_DATA',
       c_tabname_company_data  TYPE tabname    VALUE 'LFB1',
       c_tabname_def           TYPE tabname    VALUE 'LFA1',
@@ -131,6 +149,8 @@ CLASS zcl_mm_vendor DEFINITION
       gt_def_acc_grp_val TYPE tt_def_acc_grp_val,
       gt_lfa1            TYPE HASHED TABLE OF lfa1 WITH UNIQUE KEY primary_key COMPONENTS lifnr,
       gt_mt              TYPE tt_mt.
+
+    CLASS-DATA tax_multiton TYPE tax_multiton_set.
 
     CLASS-METHODS:
       create_and_cache_multiton IMPORTING !it_lfa1_key TYPE tt_lfa1_key.
@@ -165,7 +185,10 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
 
     CHECK ir_itab IS NOT INITIAL.
     ASSIGN ir_itab->* TO <lt_itab>.
-    CHECK <lt_itab> IS NOT INITIAL.
+
+    IF <lt_itab> IS INITIAL.
+      RETURN.
+    ENDIF.
 
     LOOP AT <lt_itab> ASSIGNING FIELD-SYMBOL(<ls_itab>).
 
@@ -262,7 +285,10 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
 
     CHECK ir_itab IS NOT INITIAL.
     ASSIGN ir_itab->* TO <lt_itab>.
-    CHECK <lt_itab> IS NOT INITIAL.
+
+    IF <lt_itab> IS INITIAL.
+      RETURN.
+    ENDIF.
 
     LOOP AT <lt_itab> ASSIGNING FIELD-SYMBOL(<ls_itab>).
 
@@ -366,7 +392,10 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
 
     CHECK ir_itab IS NOT INITIAL.
     ASSIGN ir_itab->* TO <lt_itab>.
-    CHECK <lt_itab> IS NOT INITIAL.
+
+    IF <lt_itab> IS INITIAL.
+      RETURN.
+    ENDIF.
 
     LOOP AT <lt_itab> ASSIGNING FIELD-SYMBOL(<ls_itab>).
 
@@ -413,13 +442,13 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
         FROM lfa1
         WHERE lifnr EQ @iv_lifnr.
 
-      CHECK sy-subrc NE 0.
-
-      RAISE EXCEPTION TYPE zcx_bc_table_content
-        EXPORTING
-          textid   = zcx_bc_table_content=>entry_missing
-          objectid = CONV #( iv_lifnr )
-          tabname  = c_tabname_def.
+      IF sy-subrc <> 0.
+        RAISE EXCEPTION TYPE zcx_bc_table_content
+          EXPORTING
+            textid   = zcx_bc_table_content=>entry_missing
+            objectid = CONV #( iv_lifnr )
+            tabname  = c_tabname_def.
+      ENDIF.
 
     ENDIF.
 
@@ -451,24 +480,29 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD get_name1_safe.
+    TRY.
+        rv_name1 = get_instance( iv_lifnr )->gs_def-name1.
+      CATCH cx_root ##no_handler.
+    ENDTRY.
+  ENDMETHOD.
+
+
   METHOD get_adrc.
 
     IF gs_lazy-flg-adrc EQ abap_false.
 
-      SELECT SINGLE *
-        FROM adrc
+      SELECT SINGLE * FROM adrc
         WHERE
           addrnumber EQ @gs_def-adrnr AND
           date_from  LE @sy-datum AND
           date_to    GE @sy-datum
-        INTO @gs_lazy-val-adrc
-        ##WARN_OK.
+        INTO @gs_lazy-val-adrc ##WARN_OK.               "#EC CI_NOORDER
 
       gs_lazy-flg-adrc = abap_true.
     ENDIF.
 
     rs_adrc = gs_lazy-val-adrc.
-
   ENDMETHOD.
 
 
@@ -479,7 +513,7 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
             bukrs = iv_bukrs
         ] TO FIELD-SYMBOL(<ls_cc>).
 
-    IF sy-subrc NE 0.
+    IF sy-subrc <> 0.
 
       DATA(ls_cc) = VALUE t_company_code_data( bukrs = iv_bukrs ).
 
@@ -491,7 +525,7 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
           )
           INTO @ls_cc-lfb1.
 
-      IF sy-subrc NE 0.
+      IF sy-subrc <> 0.
 
         ls_cc-cx = NEW #(
             textid    = zcx_bc_table_content=>entry_missing
@@ -518,7 +552,7 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
   METHOD get_default_acc_grp_vals.
 
     IF gt_def_acc_grp_val IS INITIAL.
-      SELECT * FROM zfit_xk_dzahls INTO TABLE @gt_def_acc_grp_val.
+      SELECT * FROM zfit_xk_dzahls INTO TABLE @gt_def_acc_grp_val. "#EC CI_NOWHERE
       IF gt_def_acc_grp_val IS INITIAL.
         INSERT INITIAL LINE INTO TABLE gt_def_acc_grp_val.
       ENDIF.
@@ -545,20 +579,54 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
 
 
   METHOD get_instance.
-
     ASSIGN gt_mt[ KEY primary_key COMPONENTS lifnr = iv_lifnr ] TO FIELD-SYMBOL(<ls_mt>).
 
-    IF sy-subrc NE 0.
-
+    IF sy-subrc <> 0.
       INSERT VALUE #(
           lifnr = iv_lifnr
           obj   = NEW #( iv_lifnr = iv_lifnr )
         ) INTO TABLE gt_mt ASSIGNING <ls_mt>.
-
     ENDIF.
 
     ro_obj = <ls_mt>-obj.
+  ENDMETHOD.
 
+
+  METHOD get_instance_by_tax_code.
+    DATA(multiton) = REF #( zcl_mm_vendor=>tax_multiton ).
+
+    ASSIGN multiton->*[ KEY primary_key COMPONENTS
+                        stcd2 = stcd2
+                      ] TO FIELD-SYMBOL(<multiton>).
+    IF sy-subrc <> 0.
+      DATA(new_multiton) = VALUE tax_multiton_dict( stcd2 = stcd2 ).
+
+      SELECT SINGLE lifnr FROM lfa1
+             WHERE stcd2 = @new_multiton-stcd2
+             INTO @DATA(lifnr).
+
+      CASE sy-subrc.
+        WHEN 0.
+          TRY.
+              new_multiton-obj = get_instance( lifnr ).
+            CATCH zcx_bc_table_content INTO new_multiton-cx ##no_Handler .
+          ENDTRY.
+
+        WHEN OTHERS.
+          new_multiton-cx = NEW zcx_bc_table_content(
+              textid      = zcx_bc_table_content=>entry_missing
+              objectid    = CONV #( new_multiton-stcd2 )
+              tabname     = c_tabname_def ).
+      ENDCASE.
+
+      INSERT new_multiton INTO TABLE multiton->* ASSIGNING <multiton>.
+    ENDIF.
+
+    IF <multiton>-cx IS NOT INITIAL.
+      RAISE EXCEPTION <multiton>-cx.
+    ENDIF.
+
+    output = <multiton>-obj.
   ENDMETHOD.
 
 
@@ -567,7 +635,7 @@ CLASS zcl_mm_vendor IMPLEMENTATION.
     DATA ls_lfa1 TYPE lfa1.
 
     ASSIGN gt_lfa1[ KEY primary_key COMPONENTS lifnr = iv_lifnr ] TO FIELD-SYMBOL(<ls_lfa1>).
-    IF sy-subrc NE 0.
+    IF sy-subrc <> 0.
       SELECT SINGLE * FROM lfa1 INTO ls_lfa1 WHERE lifnr = iv_lifnr.
       ls_lfa1-lifnr = iv_lifnr.
       INSERT ls_lfa1 INTO TABLE gt_lfa1 ASSIGNING <ls_lfa1>.

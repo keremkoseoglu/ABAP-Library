@@ -68,6 +68,7 @@ CLASS zcl_bc_sap_user DEFINITION
 
     METHODS:
       can_debug_change RETURNING VALUE(rv_can) TYPE abap_bool,
+      can_develop RETURNING VALUE(rv_can) TYPE abap_bool,
 
       disable
         IMPORTING
@@ -188,6 +189,19 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
                     FOR USER gv_bname
                     ID 'ACTVT'    FIELD '02'
                     ID 'OBJTYPE'  FIELD 'DEBUG'
+                    ID 'DEVCLASS' DUMMY
+                    ID 'OBJNAME'  DUMMY
+                    ID 'P_GROUP'  DUMMY.
+
+    rv_can = xsdbool( sy-subrc EQ 0 ).
+  ENDMETHOD.
+
+
+  METHOD can_develop.
+    AUTHORITY-CHECK OBJECT 'S_DEVELOP'
+                    FOR USER gv_bname
+                    ID 'ACTVT'    FIELD '02'
+                    ID 'OBJTYPE'  DUMMY
                     ID 'DEVCLASS' DUMMY
                     ID 'OBJNAME'  DUMMY
                     ID 'P_GROUP'  DUMMY.
@@ -517,7 +531,7 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
   METHOD read_all_user_emails_lazy.
     CHECK gs_clazy_flag-user_email EQ abap_false.
 
-    SELECT DISTINCT usr21~bname, adr6~smtp_addr
+    SELECT DISTINCT usr21~bname, adr6~smtp_addr AS email
            FROM adr6
            INNER JOIN usr21 ON usr21~persnumber EQ adr6~persnumber AND
                                usr21~addrnumber EQ adr6~addrnumber

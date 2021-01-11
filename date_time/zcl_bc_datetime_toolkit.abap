@@ -5,11 +5,14 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
 
   PUBLIC SECTION.
 
-    CONSTANTS:
-      c_default_periv TYPE periv VALUE 'K4'.
+    CONSTANTS: BEGIN OF c_seconds,
+                 per_hour   TYPE i VALUE 3600,
+                 per_minute TYPE i VALUE 60,
+               END OF c_seconds,
+
+               c_default_periv TYPE periv VALUE 'K4'.
 
     CLASS-METHODS:
-
       add_minutes_to_date_time
         IMPORTING
           !iv_minutes TYPE i
@@ -23,6 +26,10 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
           !it_values TYPE zbctt_date_limit_values
         RAISING
           zcx_bc_genel ,
+
+      date_to_char
+        IMPORTING !date         TYPE dats
+        RETURNING VALUE(output) TYPE char10,
 
       date_to_jahrper
         IMPORTING !iv_date          TYPE dats
@@ -44,9 +51,27 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
         RAISING
           zcx_bc_function_subrc,
 
+      get_date_range_of_period_range
+        IMPORTING
+          !gjahr_low    TYPE gjahr
+          !monat_low    TYPE monat
+          !gjahr_high   TYPE gjahr
+          !monat_high   TYPE monat
+        RETURNING
+          VALUE(output) TYPE date_t_range,
+
       get_day_in_week
         IMPORTING !iv_date      TYPE sydatum
         RETURNING VALUE(rv_day) TYPE i,
+
+      get_each_date_between_dates
+        IMPORTING
+          !iv_begda           TYPE begda
+          !iv_endda           TYPE endda
+        RETURNING
+          VALUE(rt_each_date) TYPE datum_tab
+        RAISING
+          zcx_bc_method_parameter,
 
       get_hours_between_times
         IMPORTING
@@ -76,6 +101,10 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
         RAISING
           zcx_bc_symsg,
 
+      get_last_day_of_perbl
+        IMPORTING !perbl        TYPE jahrperbl
+        RETURNING VALUE(output) TYPE sydatum,
+
       get_minutes_between_times
         IMPORTING
           !iv_from_date     TYPE sydatum
@@ -92,7 +121,7 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
       is_factory_workday
         IMPORTING
           !iv_datum         TYPE sydatum
-          !iv_calid         TYPE scal-fcalid
+          !iv_calid         TYPE scal-fcalid DEFAULT 'TR'
         RETURNING
           VALUE(rv_workday) TYPE abap_bool
         RAISING
@@ -136,52 +165,48 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
   PROTECTED SECTION.
   PRIVATE SECTION.
 
-    TYPES:
-      BEGIN OF t_diw_cache,
-        datum TYPE sydatum,
-        day   TYPE i,
-      END OF t_diw_cache,
+    TYPES: BEGIN OF t_drodp_multiton,
+             periv TYPE periv,
+             date  TYPE sydatum,
+             range TYPE date_t_range,
+           END OF t_drodp_multiton,
 
-      tt_diw_cache
-        TYPE HASHED TABLE OF t_diw_cache
-        WITH UNIQUE KEY primary_key COMPONENTS datum,
+           tt_drodp_multiton TYPE HASHED TABLE OF t_drodp_multiton WITH UNIQUE KEY primary_key COMPONENTS periv date,
 
-      BEGIN OF t_drodp_multiton,
-        periv TYPE periv,
-        date  TYPE sydatum,
-        range TYPE date_t_range,
-      END OF t_drodp_multiton,
+           BEGIN OF t_fwd_cache,
+             datum   TYPE sydatum,
+             calid   TYPE scal-fcalid,
+             cx      TYPE REF TO zcx_bc_function_subrc,
+             workday TYPE abap_bool,
+           END OF t_fwd_cache,
 
-      tt_drodp_multiton TYPE HASHED TABLE OF t_drodp_multiton WITH UNIQUE KEY primary_key COMPONENTS periv date,
+           tt_fwd_cache        TYPE HASHED TABLE OF t_fwd_cache
+                        WITH UNIQUE KEY primary_key COMPONENTS datum calid,
 
-      BEGIN OF t_fwd_cache,
-        datum   TYPE sydatum,
-        calid   TYPE scal-fcalid,
-        cx      TYPE REF TO zcx_bc_function_subrc,
-        workday TYPE abap_bool,
-      END OF t_fwd_cache,
+           tt_iipd_adhoc_cache TYPE HASHED TABLE OF zbct_iipd_adhoc
+                               WITH UNIQUE KEY primary_key COMPONENTS perio.
 
-      tt_fwd_cache
-        TYPE HASHED TABLE OF t_fwd_cache
-        WITH UNIQUE KEY primary_key COMPONENTS datum calid,
+    TYPES: BEGIN OF perbl_last_day_dict,
+             perbl TYPE jahrperbl,
+             datum TYPE sydatum,
+           END OF perbl_last_day_dict,
 
-      tt_iipd_adhoc_cache
-        type hashed table of ZBCT_IIPD_ADHOC
-        with unique key primary_key components perio.
+           perbl_last_day_set TYPE HASHED TABLE OF perbl_last_day_dict
+                              WITH UNIQUE KEY primary_key COMPONENTS perbl.
 
-    CONSTANTS:
-      c_seconds_per_hour   TYPE i VALUE 3600,
-      c_seconds_per_minute TYPE i VALUE 60.
+    CONSTANTS: BEGIN OF c_clsname,
+                 me TYPE seoclsname VALUE 'ZCL_BC_DATETIME_TOOLKIT',
+               END OF c_clsname.
 
-    CLASS-DATA:
-      gt_diw_cache        TYPE tt_diw_cache,
-      gt_fwd_cache        TYPE tt_fwd_cache,
-      gt_drodp_multiton   TYPE tt_drodp_multiton,
-      gt_iipd_adhoc_cache type tt_iipd_adhoc_cache,
-      gv_iipd_adhoc_read  type abap_bool.
+    CLASS-DATA: gt_fwd_cache        TYPE tt_fwd_cache,
+                gt_drodp_multiton   TYPE tt_drodp_multiton,
+                gt_iipd_adhoc_cache TYPE tt_iipd_adhoc_cache,
+                gv_iipd_adhoc_read  TYPE abap_bool.
+
+    CLASS-DATA perbl_last_day_cache TYPE perbl_last_day_set.
 
     CLASS-METHODS:
-      get_iipd_limit_day returning value(rv_day)  type day_nr,
+      get_iipd_limit_day RETURNING VALUE(rv_day)  TYPE day_nr,
 
       popup_date_req
         IMPORTING
@@ -203,7 +228,6 @@ ENDCLASS.
 CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
 
   METHOD add_minutes_to_date_time.
-
     DATA(lv_itime) = CONV p2012-anzhl( iv_minutes / 60 ) ##NUMBER_OK.
 
     CALL FUNCTION 'CATT_ADD_TO_TIME'
@@ -214,39 +238,39 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
       IMPORTING
         edate = cv_date
         etime = cv_time.
-
   ENDMETHOD.
 
-  METHOD check_selection_date_limit.
 
-    CHECK
-      iv_tcode  IS NOT INITIAL AND
-      it_values IS NOT INITIAL.
+  METHOD check_selection_date_limit.
+    CHECK iv_tcode  IS NOT INITIAL AND
+          it_values IS NOT INITIAL.
 
     SELECT * INTO TABLE @DATA(lt_limit) FROM zbct_date_limit
-       FOR ALL ENTRIES IN @it_values
-       WHERE tcode EQ @iv_tcode AND
-             field EQ @it_values-field.
+           FOR ALL ENTRIES IN @it_values
+           WHERE tcode EQ @iv_tcode AND
+                 field EQ @it_values-field.
 
     IF sy-subrc NE 0.
       RETURN.
     ENDIF.
 
-    SELECT SINGLE pgmna INTO @DATA(lv_repid) FROM tstc
-       WHERE tcode EQ @iv_tcode.
+    SELECT SINGLE pgmna INTO @DATA(lv_repid) FROM tstc WHERE tcode EQ @iv_tcode.
+
     LOOP AT lt_limit ASSIGNING FIELD-SYMBOL(<ls_limit>).
       READ TABLE it_values ASSIGNING FIELD-SYMBOL(<ls_value>)
                            WITH KEY field = <ls_limit>-field.
+
       IF sy-subrc EQ 0.
 
         LOOP AT <ls_value>-value ASSIGNING FIELD-SYMBOL(<ls_date>).
-          IF <ls_limit>-limit LT
-           ( <ls_date>-high - <ls_date>-low ) AND
+
+          IF <ls_limit>-limit LT ( <ls_date>-high - <ls_date>-low ) AND
              <ls_date>-high NE '00000000'.
 
-            DATA(lv_fieldtext) = selection_screen_text( EXPORTING
-                                   iv_repid = lv_repid
-                                   iv_field = <ls_limit>-field ).
+            DATA(lv_fieldtext) = selection_screen_text(
+                                     iv_repid = lv_repid
+                                     iv_field = <ls_limit>-field ).
+
             RAISE EXCEPTION TYPE zcx_bc_genel
               EXPORTING
                 textid    = zcx_bc_genel=>invalid_daterange
@@ -254,44 +278,49 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
                 limit     = <ls_limit>-limit.
           ENDIF.
         ENDLOOP.
+
         IF sy-subrc <> 0.
-          lv_fieldtext = selection_screen_text( EXPORTING
-                                     iv_repid = lv_repid
-                                     iv_field = <ls_limit>-field ).
+          lv_fieldtext = selection_screen_text(
+                             iv_repid = lv_repid
+                             iv_field = <ls_limit>-field ).
+
           RAISE EXCEPTION TYPE zcx_bc_genel
             EXPORTING
               textid    = zcx_bc_genel=>invalid_daterange
               fieldtext = lv_fieldtext
               limit     = <ls_limit>-limit.
         ENDIF.
-
-
       ENDIF.
     ENDLOOP.
   ENDMETHOD.
+
+
+  METHOD date_to_char.
+    WRITE date TO output.
+  ENDMETHOD.
+
 
   METHOD date_to_jahrper.
     rv_jahrper = |{ iv_date+0(4) }0{ iv_date+4(2) }|.
   ENDMETHOD.
 
+
   METHOD get_date_range_of_date_period.
 
     ASSIGN gt_drodp_multiton[ KEY primary_key COMPONENTS
-        periv = iv_periv
-        date = iv_date
-    ] TO FIELD-SYMBOL(<ls_mt>).
+                              periv = iv_periv
+                              date = iv_date
+                            ] TO FIELD-SYMBOL(<ls_mt>).
 
     IF sy-subrc NE 0.
 
       DATA(ls_mt) = VALUE t_drodp_multiton(
-          periv = iv_periv
-          date  = iv_date
-      ).
+                        periv = iv_periv
+                        date  = iv_date ).
 
-      APPEND VALUE #(
-          option = zcl_bc_ddic_toolkit=>c_option_bt
-          sign   = zcl_bc_ddic_toolkit=>c_sign_i
-      ) TO ls_mt-range ASSIGNING FIELD-SYMBOL(<ls_range>).
+      APPEND VALUE #( option = zcl_bc_ddic_toolkit=>c_option_bt
+                      sign   = zcl_bc_ddic_toolkit=>c_sign_i
+                    ) TO ls_mt-range ASSIGNING FIELD-SYMBOL(<ls_range>).
 
       DATA(lv_poper) = CONV poper( ls_mt-date+4(2) ).
 
@@ -326,45 +355,54 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
           ##FM_SUBRC_OK.
 
       zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'LAST_DAY_IN_PERIOD_GET' ).
-
       INSERT ls_mt INTO TABLE gt_drodp_multiton ASSIGNING <ls_mt>.
-
     ENDIF.
 
     rt_range = <ls_mt>-range.
+  ENDMETHOD.
 
+
+  METHOD get_date_range_of_period_range.
+    DATA(first_day) = CONV dats( |{ gjahr_low }{ monat_low }01| ).
+
+    DATA(last_day) = get_last_day_of_period(
+          iv_perio = 'M'
+          iv_datum = CONV #( |{ gjahr_high }{ monat_high }01| ) ).
+
+    output = VALUE #( (
+        sign   = zcl_bc_ddic_toolkit=>c_sign_i
+        option = zcl_bc_ddic_toolkit=>c_option_bt
+        low    = first_day
+        high   = last_day ) ).
   ENDMETHOD.
 
 
   METHOD get_day_in_week.
+    rv_day = ycl_addict_datetime_toolkit=>get_day_in_week( iv_date ).
+  ENDMETHOD.
 
-    DATA lv_wotnr TYPE p.
 
-    ASSIGN gt_diw_cache[
-        datum = iv_date
-      ] TO FIELD-SYMBOL(<ls_diw>).
+  METHOD get_each_date_between_dates.
 
-    IF sy-subrc NE 0.
-
-      DATA(ls_cache) = VALUE t_diw_cache( datum = iv_date ).
-
-      CALL FUNCTION 'DAY_IN_WEEK'
+    IF iv_begda GT iv_endda.
+      RAISE EXCEPTION TYPE zcx_bc_method_parameter
         EXPORTING
-          datum = ls_cache-datum
-        IMPORTING
-          wotnr = lv_wotnr.
-
-      ls_cache-day = lv_wotnr.
-
-      INSERT ls_cache
-        INTO TABLE gt_diw_cache
-        ASSIGNING <ls_diw>.
-
+          textid       = zcx_bc_method_parameter=>param_pair_inconsistent
+          class_name   = c_clsname-me
+          method_name  = 'GET_EACH_DATE_BETWEEN_DATES'
+          param_name   = 'BEGDA'
+          param_name_2 = 'ENDDA'.
     ENDIF.
 
-    rv_day = <ls_diw>-day.
+    DATA(lv_date_cursor) = iv_begda.
+
+    WHILE lv_date_cursor LE iv_endda.
+      APPEND lv_date_cursor TO rt_each_date.
+      lv_date_cursor = lv_date_cursor + 1.
+    ENDWHILE.
 
   ENDMETHOD.
+
 
   METHOD get_hours_between_times.
 
@@ -375,60 +413,51 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
         date2    = iv_from_date
         time2    = iv_from_time
       IMPORTING
-        res_secs = rv_hours
-    ).
+        res_secs = rv_hours ).
 
-    DIVIDE rv_hours BY c_seconds_per_hour.
+    DIVIDE rv_hours BY c_seconds-per_hour.
+  ENDMETHOD.
+
+
+  METHOD get_iipd_limit_day.
+
+    IF gv_iipd_adhoc_read EQ abap_false.
+      SELECT * FROM zbct_iipd_adhoc INTO CORRESPONDING FIELDS OF TABLE gt_iipd_adhoc_cache. "#EC CI_NOWHERE
+      gv_iipd_adhoc_read = abap_true.
+    ENDIF.
+
+    rv_day = VALUE #( gt_iipd_adhoc_cache[ KEY primary_key COMPONENTS
+                                           perio = |{ sy-datum+0(4) }0{ sy-datum+4(2) }|
+                                         ]-day_nr
+                      DEFAULT 24 ) ##NUMBER_OK.
 
   ENDMETHOD.
 
-  method get_iipd_limit_day.
-
-    if gv_iipd_adhoc_read eq abap_false.
-      select * from ZBCT_IIPD_ADHOC into corresponding fields of table gt_iipd_adhoc_cache. "#EC CI_NOWHERE
-      gv_iipd_adhoc_Read = abap_true.
-    endif.
-
-    rv_day = value #(
-      gt_iipd_adhoc_Cache[
-          key primary_key components
-          perio = |{ sy-datum+0(4) }0{ sy-datum+4(2) }|
-        ]-day_nr
-      default 24
-    ) ##NUMBER_OK.
-
-  endmethod.
 
   METHOD get_incoming_invoice_post_date.
-
-    data(lv_limit_day) = get_iipd_limit_day( ).
+    DATA(lv_limit_day) = get_iipd_limit_day( ).
 
     DATA(lv_first_day_of_prev_period) = CONV sydatum(
-      |{ SWITCH numc4( sy-datum+4(2) WHEN '01' THEN sy-datum+0(4) - 1 ELSE sy-datum+0(4) ) }| &&
-      |{ SWITCH numc2( sy-datum+4(2) WHEN '01' THEN '12' ELSE sy-datum+4(2) - 1 ) }| &&
-      '01'
-    ).
+        |{ SWITCH numc4( sy-datum+4(2) WHEN '01' THEN sy-datum+0(4) - 1 ELSE sy-datum+0(4) ) }| &&
+        |{ SWITCH numc2( sy-datum+4(2) WHEN '01' THEN '12' ELSE sy-datum+4(2) - 1 ) }| &&
+        '01' ).
 
     DATA(lv_first_day_of_curr_period) = CONV sydatum( |{ sy-datum+0(6) }01| ).
 
     DATA(lv_calculated_keydate) = COND sydatum(
-      WHEN iv_issue_date+0(6) EQ sy-datum+0(6) " Fatura tarihi güncel dönemdeyse
-      THEN iv_issue_date " o halde fatura tarihini al
-
-      WHEN iv_issue_date+0(6) EQ lv_first_day_of_prev_period+0(6) " Fatura tarihi bir önceki dönemdeyse
-      THEN COND #(
-        WHEN sy-datum+6(2) LE lv_limit_day " Bugün ayın 24'ünü geçmediyse
+        WHEN iv_issue_date+0(6) EQ sy-datum+0(6) " Fatura tarihi güncel dönemdeyse
         THEN iv_issue_date " o halde fatura tarihini al
-        ELSE lv_first_day_of_curr_period " 24'ünü geçtik -> Bulunduğumuz dönemin ilk gününü al
-      )
 
-      WHEN iv_issue_date+0(6) LT lv_first_day_of_prev_period+0(6) " Fatura tarihi bir önceki dönemden de eskiyse
-      THEN COND #(
-        WHEN sy-datum+6(2) LE lv_limit_day " Bugün ayın 24'ünü geçmediyse
-        THEN lv_first_day_of_prev_period " Önceki dönemin ilk gününü al
-        ELSE lv_first_day_of_curr_period " 24'ünü geçtik -> Bulunduğumuz dönemin ilk gününü al
-      )
-    ) ##NUMBER_OK.
+        WHEN iv_issue_date+0(6) EQ lv_first_day_of_prev_period+0(6) " Fatura tarihi bir önceki dönemdeyse
+        THEN COND #( WHEN sy-datum+6(2) LE lv_limit_day " Bugün ayın 24'ünü geçmediyse
+                     THEN iv_issue_date " o halde fatura tarihini al
+                     ELSE lv_first_day_of_curr_period ) " 24'ünü geçtik -> Bulunduğumuz dönemin ilk gününü al
+
+        WHEN iv_issue_date+0(6) LT lv_first_day_of_prev_period+0(6) " Fatura tarihi bir önceki dönemden de eskiyse
+        THEN COND #( WHEN sy-datum+6(2) LE lv_limit_day " Bugün ayın 24'ünü geçmediyse
+                     THEN lv_first_day_of_prev_period " Önceki dönemin ilk gününü al
+                     ELSE lv_first_day_of_curr_period ) ) ##NUMBER_OK. " 24'ünü geçtik -> Bulunduğumuz dönemin ilk gününü al
+
 
     IF iv_latest_gi_date IS SUPPLIED AND
        iv_latest_gi_date IS NOT INITIAL AND
@@ -436,15 +465,10 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
       lv_calculated_keydate = iv_latest_gi_date. " Mal giriş tarihini al
     ENDIF.
 
-    rv_date = COND #(
-      WHEN
-        sy-batch EQ abap_true OR
-        iv_enable_popup EQ abap_false
-      THEN
-        lv_calculated_keydate
-      ELSE
-        popup_date_req( lv_calculated_keydate )
-    ).
+    rv_date = COND #( WHEN sy-batch        EQ abap_true OR
+                           iv_enable_popup EQ abap_false
+                      THEN lv_calculated_keydate
+                      ELSE popup_date_req( lv_calculated_keydate ) ).
 
     IF rv_date IS INITIAL.
       RAISE EXCEPTION TYPE zcx_bc_date
@@ -454,11 +478,14 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD get_last_day_of_period.
+
     DATA: lv_week  TYPE scal-week,
           lv_date  TYPE scal-date,
           ls_symsg TYPE recasymsg.
-    TRY .
+
+    TRY.
         CASE iv_perio.
           WHEN 'W'.
             CALL FUNCTION 'DATE_GET_WEEK'
@@ -475,7 +502,6 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
                   ms_symsg = ls_symsg.
             ENDIF.
 
-
             CALL FUNCTION 'WEEK_GET_FIRST_DAY'
               EXPORTING
                 week         = lv_week
@@ -490,6 +516,7 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
                   ms_symsg = ls_symsg.
             ENDIF.
             rv_datum = lv_date + 6.
+
           WHEN 'M'.
             CALL FUNCTION 'LAST_DAY_OF_MONTHS'
               EXPORTING
@@ -504,6 +531,7 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
                 EXPORTING
                   ms_symsg = ls_symsg.
             ENDIF.
+
           WHEN OTHERS.
             ls_symsg-msgty = 'E'.
             ls_symsg-msgid = '00'.
@@ -513,6 +541,7 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
               EXPORTING
                 ms_symsg = ls_symsg.
         ENDCASE.
+
       CATCH zcx_bc_symsg INTO DATA(lo_cx_rc).
         RAISE EXCEPTION TYPE zcx_bc_symsg
           EXPORTING
@@ -524,35 +553,49 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
-  METHOD get_minutes_between_times.
 
-    cl_abap_tstmp=>td_subtract(
-      EXPORTING
-        date1    = iv_to_date
-        time1    = iv_to_time
-        date2    = iv_from_date
-        time2    = iv_from_time
-      IMPORTING
-        res_secs = rv_minutes
-    ).
+  METHOD get_last_day_of_perbl.
+    DATA(cache) = REF #( zcl_bc_datetime_toolkit=>perbl_last_day_cache ).
 
-    DIVIDE rv_minutes BY c_seconds_per_minute.
+    ASSIGN cache->*[ KEY primary_key COMPONENTS
+                     perbl = perbl
+                   ] TO FIELD-SYMBOL(<cache>).
 
+    IF sy-subrc <> 0.
+      DATA(new_cache) = VALUE perbl_last_day_dict(
+          perbl = perbl
+          datum = get_last_day_of_period(
+                      iv_perio = 'M'
+                      iv_datum = |{ perbl+0(4) }{ perbl+5(2) }01| ) ).
+
+      INSERT new_cache INTO TABLE cache->* ASSIGNING <cache>.
+    ENDIF.
+
+    output = <cache>-datum.
   ENDMETHOD.
 
-  METHOD get_mutual_checked_days.
 
+  METHOD get_minutes_between_times.
+    cl_abap_tstmp=>td_subtract( EXPORTING date1    = iv_to_date
+                                          time1    = iv_to_time
+                                          date2    = iv_from_date
+                                          time2    = iv_from_time
+                                IMPORTING res_secs = rv_minutes ).
+
+    DIVIDE rv_minutes BY c_seconds-per_minute.
+  ENDMETHOD.
+
+
+  METHOD get_mutual_checked_days.
     CHECK it_day IS NOT INITIAL.
 
-    rs_day = VALUE #(
-      monda = abap_true
-      tuesd = abap_true
-      wedne = abap_true
-      thurs = abap_true
-      frida = abap_true
-      satur = abap_true
-      sunda = abap_true
-    ).
+    rs_day = VALUE #( monda = abap_true
+                      tuesd = abap_true
+                      wedne = abap_true
+                      thurs = abap_true
+                      frida = abap_true
+                      satur = abap_true
+                      sunda = abap_true ).
 
     LOOP AT it_day ASSIGNING FIELD-SYMBOL(<ls_day>).
 
@@ -585,27 +628,21 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
       ENDIF.
 
     ENDLOOP.
-
   ENDMETHOD.
 
 
   METHOD is_factory_workday.
 
-    ASSIGN gt_fwd_cache[
-        KEY primary_key COMPONENTS
-        datum = iv_datum
-        calid = iv_calid
-      ] TO FIELD-SYMBOL(<ls_fwd>).
+    ASSIGN gt_fwd_cache[ KEY primary_key COMPONENTS
+                         datum = iv_datum
+                         calid = iv_calid
+                       ] TO FIELD-SYMBOL(<ls_fwd>).
 
     IF sy-subrc NE 0.
-
-      DATA(ls_fwd) = VALUE t_fwd_cache(
-        datum = iv_datum
-        calid = iv_calid
-      ).
+      DATA(ls_fwd) = VALUE t_fwd_cache( datum = iv_datum
+                                        calid = iv_calid ).
 
       TRY.
-
           CALL FUNCTION 'DATE_CHECK_WORKINGDAY'
             EXPORTING
               date                       = ls_fwd-datum
@@ -633,10 +670,7 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
           ls_fwd-cx = lo_fun.
       ENDTRY.
 
-      INSERT ls_fwd
-        INTO TABLE gt_fwd_cache
-        ASSIGNING <ls_fwd>.
-
+      INSERT ls_fwd INTO TABLE gt_fwd_cache ASSIGNING <ls_fwd>.
     ENDIF.
 
     IF <ls_fwd>-cx IS NOT INITIAL.
@@ -644,29 +678,23 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
     ENDIF.
 
     rv_workday = <ls_fwd>-workday.
-
   ENDMETHOD.
 
 
   METHOD is_weekday_checked.
-
     DATA(lv_day_in_week) = get_day_in_week( iv_datum ).
 
-    rv_checked = xsdbool(
-      ( lv_day_in_week EQ 1 AND is_wdays-monda EQ abap_true ) OR
-      ( lv_day_in_week EQ 2 AND is_wdays-tuesd EQ abap_true ) OR
-      ( lv_day_in_week EQ 3 AND is_wdays-wedne EQ abap_true ) OR
-      ( lv_day_in_week EQ 4 AND is_wdays-thurs EQ abap_true ) OR
-      ( lv_day_in_week EQ 5 AND is_wdays-frida EQ abap_true ) OR
-      ( lv_day_in_week EQ 6 AND is_wdays-satur EQ abap_true ) OR
-      ( lv_day_in_week EQ 7 AND is_wdays-sunda EQ abap_true )
-    ).
-
+    rv_checked = xsdbool( ( lv_day_in_week EQ 1 AND is_wdays-monda EQ abap_true ) OR
+                          ( lv_day_in_week EQ 2 AND is_wdays-tuesd EQ abap_true ) OR
+                          ( lv_day_in_week EQ 3 AND is_wdays-wedne EQ abap_true ) OR
+                          ( lv_day_in_week EQ 4 AND is_wdays-thurs EQ abap_true ) OR
+                          ( lv_day_in_week EQ 5 AND is_wdays-frida EQ abap_true ) OR
+                          ( lv_day_in_week EQ 6 AND is_wdays-satur EQ abap_true ) OR
+                          ( lv_day_in_week EQ 7 AND is_wdays-sunda EQ abap_true ) ).
   ENDMETHOD.
 
 
   METHOD last_day.
-
     CALL FUNCTION 'BKK_GET_MONTH_LASTDAY'
       EXPORTING
         i_date = iv_day
@@ -674,23 +702,21 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
         e_date = rv_day.
   ENDMETHOD.
 
-  METHOD popup_date_req.
 
-    DATA:
-      lv_title(30) TYPE c,
-      lv_retcode   TYPE c ##NEEDED,
-      lt_fields    TYPE TABLE OF sval.
+  METHOD popup_date_req.
+    DATA: lv_title(30) TYPE c,
+          lv_retcode   TYPE c ##NEEDED,
+          lt_fields    TYPE TABLE OF sval.
 
     lv_title = TEXT-002.
 
     CLEAR rv_date.
 
-    APPEND VALUE #(
-        tabname   = 'SYST'
-        fieldname = 'DATUM'
-        fieldtext = TEXT-003
-        value     = iv_date
-      ) TO lt_fields.
+    APPEND VALUE #( tabname   = 'SYST'
+                    fieldname = 'DATUM'
+                    fieldtext = TEXT-003
+                    value     = iv_date
+                  ) TO lt_fields.
 
 
     CALL FUNCTION 'POPUP_GET_VALUES'
@@ -721,6 +747,7 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD previous_month_last_day.
     ev_last_day = sy-datum.
     ev_last_day+6(2) = '01'.
@@ -730,19 +757,18 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
 
 
   METHOD selection_screen_text.
-
-    DATA : lt_field_info     TYPE STANDARD TABLE OF rsel_info,
-           lt_field_names    TYPE STANDARD TABLE OF rsdynpar,
-           lv_structure_name TYPE dd02l-tabname,
-           lv_field          TYPE dd04l-rollname,
-           lt_fieldcat       TYPE slis_t_fieldcat_alv,
-           lt_dd04t_tab_a    TYPE STANDARD TABLE OF dd04t,
-           lt_textpool       TYPE TABLE OF textpool.
+    DATA: lt_field_info     TYPE STANDARD TABLE OF rsel_info,
+          lt_field_names    TYPE STANDARD TABLE OF rsdynpar,
+          lv_structure_name TYPE dd02l-tabname,
+          lv_field          TYPE dd04l-rollname,
+          lt_fieldcat       TYPE slis_t_fieldcat_alv,
+          lt_dd04t_tab_a    TYPE STANDARD TABLE OF dd04t,
+          lt_textpool       TYPE TABLE OF textpool.
 
     READ TEXTPOOL iv_repid INTO lt_textpool LANGUAGE sy-langu.
 
     READ TABLE lt_textpool ASSIGNING FIELD-SYMBOL(<ls_text>)
-               WITH KEY key = iv_field.
+                           WITH KEY key = iv_field.
     IF sy-subrc EQ 0.
       IF <ls_text>-entry NE 'D       .'.
         rv_text = <ls_text>-entry+8(40).
@@ -750,21 +776,19 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
         CALL FUNCTION 'RS_REPORTSELECTSCREEN_INFO'
           EXPORTING
             report              = iv_repid
-*           DEFAULT_VALUES      = 'X'
           TABLES
             field_info          = lt_field_info
-*           DEF_VALUES          = DEF_VALUES
             field_names         = lt_field_names
           EXCEPTIONS
             no_selections       = 1
             report_not_existent = 2
             subroutine_pool     = 3.
+
         IF sy-subrc NE 0.
           MESSAGE ID sy-msgid TYPE 'E' NUMBER sy-msgno
                          WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
         ELSE.
-          READ TABLE lt_field_info ASSIGNING FIELD-SYMBOL(<ls_info>)
-                     WITH KEY name = iv_field.
+          READ TABLE lt_field_info ASSIGNING FIELD-SYMBOL(<ls_info>) WITH KEY name = iv_field.
           IF sy-subrc EQ 0.
             IF <ls_info>-dbfield CA '-'.
               SPLIT <ls_info>-dbfield AT '-'
@@ -823,8 +847,8 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD subtract_days_from_month_end.
 
+  METHOD subtract_days_from_month_end.
     DATA(lv_year)  = iv_jahrper+0(4).
     DATA(lv_month) = CONV t009b-poper( iv_jahrper+5(2) ).
 
@@ -843,16 +867,13 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
         ##FM_SUBRC_OK.
 
     zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'LAST_DAY_IN_PERIOD_GET' ).
-
     SUBTRACT iv_days FROM rv_date.
-
   ENDMETHOD.
 
-  METHOD subtract_durat_from_date_time.
 
-    DATA:
-      lv_end_date TYPE sydatum,
-      lv_end_time TYPE syuzeit.
+  METHOD subtract_durat_from_date_time.
+    DATA: lv_end_date TYPE sydatum,
+          lv_end_time TYPE syuzeit.
 
     DATA(lv_start_date) = cv_date.
     DATA(lv_start_time) = cv_time.
@@ -879,17 +900,14 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
         ##FM_SUBRC_OK.
 
     zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'END_TIME_DETERMINE' ).
-
     cv_date = lv_end_date.
     cv_time = lv_end_time.
-
   ENDMETHOD.
 
-  METHOD subtract_month_from_jahrper.
 
-    DATA:
-      lv_year  TYPE numc4,
-      lv_month TYPE numc2.
+  METHOD subtract_month_from_jahrper.
+    DATA: lv_year  TYPE numc4,
+          lv_month TYPE numc2.
 
     lv_year  = iv_jahrper+0(4).
     lv_month = iv_jahrper+5(2).
@@ -903,7 +921,6 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
     ENDDO.
 
     rv_jahrper = |{ lv_year }0{ lv_month }|.
-
   ENDMETHOD.
 
 ENDCLASS.

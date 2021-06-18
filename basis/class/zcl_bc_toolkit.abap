@@ -29,10 +29,10 @@ public section.
       value(RV_ACTIVE) type ABAP_BOOL .
   class-methods READ_TEXT
     importing
-      !IV_ID type THEAD-TDID optional
-      !IV_LANGUAGE type THEAD-TDSPRAS optional
+      !IV_ID type THEAD-TDID default 'ST'
+      !IV_LANGUAGE type THEAD-TDSPRAS default SY-LANGU
       !IV_NAME type THEAD-TDNAME optional
-      !IV_OBJECT type THEAD-TDOBJECT optional
+      !IV_OBJECT type THEAD-TDOBJECT default 'TEXT'
     returning
       value(RT_LINES) type TTTEXT
     raising
@@ -66,9 +66,17 @@ public section.
       !IV_OBJECT type THEAD-TDOBJECT optional
     changing
       !CV_TEXT type ANY .
-
-  class-methods leave_dangerous_program.
-
+  class-methods LEAVE_DANGEROUS_PROGRAM .
+  class-methods STRING_DOWNLOAD
+    importing
+      !IV_STR type STRING
+      value(IV_FILENAME) type STRING optional
+      !IV_OPEN type ABAP_BOOL optional .
+  class-methods OALPHA
+    importing
+      !IV_VALUE type CLIKE
+    returning
+      value(RV_VALUE) type TEXT50 .
   PROTECTED SECTION.
 private section.
 
@@ -189,6 +197,22 @@ CLASS ZCL_BC_TOOLKIT IMPLEMENTATION.
   ENDMETHOD.
 
 
+  method leave_dangerous_program.
+    message i787(zsd).
+    leave program.
+  endmethod.
+
+
+  method OALPHA.
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+      EXPORTING
+        input         = iv_value
+     IMPORTING
+       OUTPUT        = rv_value
+              .
+  endmethod.
+
+
   METHOD print_option_get_for_pdf.
 
     es_control_param-getotf     = 'X'.
@@ -275,9 +299,103 @@ CLASS ZCL_BC_TOOLKIT IMPLEMENTATION.
 
   ENDMETHOD.
 
-  method leave_dangerous_program.
-    message i787(zsd).
-    leave program.
-  endmethod.
 
+  METHOD string_download.
+
+  DATA :
+         BEGIN OF ls_bin,
+           data(1024),
+         END OF ls_bin.
+
+  DATA : lv_size    TYPE i,
+         lv_xbuffer TYPE xstring,
+         lt_bin     LIKE TABLE OF ls_bin,
+         lv_file    TYPE string,
+         lv_dir     TYPE string.
+
+  CALL FUNCTION 'SCMS_STRING_TO_XSTRING'
+    EXPORTING
+      text     = iv_str
+      encoding = '4110'
+    IMPORTING
+      buffer   = lv_xbuffer.
+
+  CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+    EXPORTING
+      buffer        = lv_xbuffer
+    IMPORTING
+      output_length = lv_size
+    TABLES
+      binary_tab    = lt_bin.
+
+  CALL METHOD cl_gui_frontend_services=>directory_browse
+    EXPORTING
+      window_title         = 'Dizin Seçiniz'
+*      initial_folder       =
+    CHANGING
+      selected_folder      = lv_dir
+    EXCEPTIONS
+      cntl_error           = 1
+      error_no_gui         = 2
+      not_supported_by_gui = 3
+      OTHERS               = 4.
+
+  IF iv_filename IS NOT INITIAL.
+     CONCATENATE  lv_dir '\' iv_filename '.xml' INTO lv_file.
+  ELSE.
+    CONCATENATE  lv_dir  'data.xml' INTO lv_file.
+  ENDIF.
+
+CALL FUNCTION 'GUI_DOWNLOAD'
+  EXPORTING
+    bin_filesize                    = lv_size
+    filename                        = lv_file
+    filetype                        = 'BIN'
+  TABLES
+    data_tab                        = lt_bin
+ EXCEPTIONS
+   file_write_error                = 1
+   no_batch                        = 2
+   gui_refuse_filetransfer         = 3
+   invalid_type                    = 4
+   no_authority                    = 5
+   unknown_error                   = 6
+   header_not_allowed              = 7
+   separator_not_allowed           = 8
+   filesize_not_allowed            = 9
+   header_too_long                 = 10
+   dp_error_create                 = 11
+   dp_error_send                   = 12
+   dp_error_write                  = 13
+   unknown_dp_error                = 14
+   access_denied                   = 15
+   dp_out_of_memory                = 16
+   disk_full                       = 17
+   dp_timeout                      = 18
+   file_not_found                  = 19
+   dataprovider_exception          = 20
+   control_flush_error             = 21
+   OTHERS                          = 22
+          .
+    IF sy-subrc NE 0.
+      MESSAGE ID sy-msgid TYPE 'I' NUMBER sy-msgno
+                     WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+                     DISPLAY LIKE 'E'.
+    else.
+      IF iv_open eq abap_true.
+        CALL METHOD cl_gui_frontend_services=>execute
+          EXPORTING
+            document               = lv_file
+          EXCEPTIONS
+            cntl_error             = 1
+            error_no_gui           = 2
+            bad_parameter          = 3
+            file_not_found         = 4
+            path_not_found         = 5
+            file_extension_unknown = 6
+            error_execute_failed   = 7
+            OTHERS                 = 10.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
 ENDCLASS.

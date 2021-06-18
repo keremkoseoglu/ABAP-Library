@@ -12,7 +12,13 @@ CLASS zcl_mm_material_document DEFINITION
 
            mat_doc_key_list TYPE STANDARD TABLE OF mat_doc_key_dict WITH EMPTY KEY.
 
-    DATA mat_doc_key TYPE mat_doc_key_dict READ-ONLY.
+    TYPES: BEGIN OF mkpf_dict,
+             bldat TYPE mkpf-bldat,
+             budat TYPE mkpf-budat,
+           END OF mkpf_dict.
+
+    DATA: mat_doc_key TYPE mat_doc_key_dict READ-ONLY,
+          mkpf        TYPE mkpf_dict READ-ONLY.
 
     CLASS-METHODS get_instance
       IMPORTING
@@ -22,6 +28,10 @@ CLASS zcl_mm_material_document DEFINITION
         VALUE(output)  TYPE REF TO zcl_mm_material_document
       RAISING
         cx_no_entry_in_table.
+
+    CLASS-METHODS wait_until_doc_in_db
+      IMPORTING !mat_doc_key TYPE mat_doc_key_dict
+      RAISING   zcx_bc_commit_wait_expire.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -33,6 +43,8 @@ CLASS zcl_mm_material_document DEFINITION
 
            multiton_set TYPE HASHED TABLE OF multiton_dict
                         WITH UNIQUE KEY primary_key COMPONENTS key.
+
+    CONSTANTS max_wait_sec TYPE i VALUE 30.
 
     CONSTANTS: BEGIN OF table,
                  header TYPE tabname VALUE 'MKPF',
@@ -49,7 +61,6 @@ ENDCLASS.
 
 
 CLASS zcl_mm_material_document IMPLEMENTATION.
-
   METHOD get_instance.
     IF bypass_buffer = abap_true.
       output = NEW #( mat_doc_key ).
@@ -57,18 +68,41 @@ CLASS zcl_mm_material_document IMPLEMENTATION.
     ENDIF.
 
     ASSIGN zcl_mm_material_document=>multitons[
-        KEY primary_key COMPONENTS
-        key = mat_doc_key ] TO FIELD-SYMBOL(<multiton>).
+             KEY primary_key COMPONENTS
+             key = mat_doc_key
+           ] TO FIELD-SYMBOL(<multiton>).
 
-    IF sy-subrc NE 0.
-      INSERT VALUE #(
-          key = mat_doc_key
-          obj = NEW #( mat_doc_key )
-        ) INTO TABLE zcl_mm_material_document=>multitons
-          ASSIGNING <multiton>.
+    IF sy-subrc <> 0.
+      INSERT VALUE #( key = mat_doc_key
+                      obj = NEW #( mat_doc_key ) )
+             INTO TABLE zcl_mm_material_document=>multitons
+             ASSIGNING <multiton>.
     ENDIF.
 
     output = <multiton>-obj.
+  ENDMETHOD.
+
+
+  METHOD wait_until_doc_in_db.
+    """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+    " COMMIT sonrasında çağırılabilir. Belge veritabanına
+    " düşene kadar bekler. Uzun bir süre düşmezse hata üretir.
+    """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+    DO max_wait_sec TIMES.
+      TRY.
+          get_instance( mat_doc_key   = mat_doc_key
+                        bypass_buffer = abap_true ).
+          RETURN.
+        CATCH cx_root ##no_handler.
+      ENDTRY.
+
+      WAIT UP TO 1 SECONDS.
+    ENDDO.
+
+    RAISE EXCEPTION TYPE zcx_bc_commit_wait_expire
+      EXPORTING
+        textid  = zcx_bc_commit_wait_expire=>table_expired
+        tabname = table-header.
   ENDMETHOD.
 
 
@@ -81,18 +115,20 @@ CLASS zcl_mm_material_document IMPLEMENTATION.
       IMPORTING
         output = mblnr.
 
-    SELECT SINGLE mblnr, mjahr
+    SELECT SINGLE mblnr, mjahr, bldat, budat
            FROM mkpf
            WHERE mblnr = @mblnr AND
                  mjahr = @mat_doc_key-mjahr
-           INTO CORRESPONDING FIELDS OF @me->mat_doc_key.
+           INTO @DATA(mkpf).
 
-    IF sy-subrc NE 0.
+    IF sy-subrc <> 0.
       RAISE EXCEPTION TYPE cx_no_entry_in_table
         EXPORTING
           table_name = CONV #( table-header )
           entry_name = |{ mat_doc_key-mblnr }{ mat_doc_key-mjahr }|.
     ENDIF.
-  ENDMETHOD.
 
+    MOVE-CORRESPONDING mkpf TO: me->mat_doc_key,
+                                me->mkpf.
+  ENDMETHOD.
 ENDCLASS.

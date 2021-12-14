@@ -29,7 +29,9 @@ public section.
   data GV_HTML_END_NAME type SLIS_FORMNAME .
   class-data COLOR_RED type CHAR4 value 'C610' ##NO_TEXT.
   class-data COLOR_GREEN type CHAR4 value 'C510' ##NO_TEXT.
+  class-data COLOR_OPEN_GREEN type CHAR4 value 'C500' ##NO_TEXT.
   class-data COLOR_YELLOW type CHAR4 value 'C310' ##NO_TEXT.
+  class-data COLOR_OPEN_YELLOW type CHAR4 value 'C300' ##NO_TEXT.
   class-data C_COMMAND_CLICK type SY-UCOMM value '&IC1' ##NO_TEXT.
   class-data GT_MAPPING type TT_MAPPING .
   class-data COLOR_BLUE type CHAR4 value 'C110' ##NO_TEXT.
@@ -41,7 +43,10 @@ public section.
   class-data COLOR_OPEN_BLUE0 type CHAR4 value 'C400' ##NO_TEXT.
   class-data COLOR_ORANGE0 type CHAR4 value 'C700' ##NO_TEXT.
   constants C_TOP type SLIS_ALV_EVENT-FORM value 'TOP_OF_PAGE' ##NO_TEXT.
-
+  CONSTANTS : BEGIN OF c_edit,
+               enable  type c VALUE 'E',
+               disable type c VALUE 'D',
+              END OF c_edit.
   methods CONSTRUCTOR
     importing
       value(IV_ITAB_NAME) type DD02L-TABNAME optional
@@ -51,7 +56,10 @@ public section.
       value(IV_STAT_NAME) type SLIS_FORMNAME optional
       value(IV_COMD_NAME) type SLIS_FORMNAME optional
       value(IV_TOPP_NAME) type SLIS_FORMNAME optional
-      value(IV_HTML_END_NAME) type SLIS_FORMNAME optional .
+      value(IV_HTML_END_NAME) type SLIS_FORMNAME optional
+      value(IS_LAYOUT) type SLIS_LAYOUT_ALV optional
+      value(IR_DATA) type ref to DATA optional
+      value(IS_VARIANT) type DISVARIANT optional .
   methods S_MERGE
     importing
       !IV_STR_NAME type DD02L-TABNAME optional
@@ -71,7 +79,8 @@ public section.
     importing
       !TABLE type ref to DATA
       value(IS_VARIANT) type DISVARIANT optional
-      value(IS_TOP_OF_PAGE) type FLAG default SPACE .
+      value(IS_TOP_OF_PAGE) type FLAG default SPACE
+      value(IV_DEFAULT) type FLAG default 'X' .
   methods SET_FCAT
     importing
       value(T_FCAT) type SLIS_T_FIELDCAT_ALV .
@@ -103,11 +112,51 @@ public section.
       !IV_STR_NAME type TABNAME
     returning
       value(RT_FCAT) type LVC_T_FCAT .
+  class-methods MODIFY_CELL
+    importing
+      value(IT_CHANGED) type ref to CL_ALV_CHANGED_DATA_PROTOCOL
+      value(IV_ROW_ID) type LVC_S_MODI-ROW_ID
+      value(IT_FNAME) type LVC_T_FNAM optional
+      value(IT_FCAT) type LVC_T_FCAT optional
+      !IS_DATA type ANY .
+  class-methods EXCLUDE_TB_FUNCTIONS
+    changing
+      !CT_EXC type UI_FUNCTIONS .
+  class-methods REGISTER_EDIT
+    changing
+      !CO_GRID type ref to CL_GUI_ALV_GRID .
+  class-methods REFRESH
+    importing
+      !IO_GRID type ref to CL_GUI_ALV_GRID .
+  class-methods SET_STYLE
+    importing
+      !IV_FIELD type LVC_FNAME
+      !IV_TYPE type CHAR1
+    changing
+      !CT_STYL type LVC_T_STYL .
+  class-methods GUI_REFRESH .
+  class-methods CHECK_CHANGED .
+
+  CLASS-METHODS popup_alv
+    IMPORTING
+      !iv_start_column TYPE int4 DEFAULT 15
+      !iv_start_line TYPE int4 DEFAULT 5
+      !iv_end_column TYPE int4 OPTIONAL
+      !iv_end_line TYPE int4 OPTIONAL
+      !iv_title TYPE lvc_title OPTIONAL
+      VALUE(it_data) TYPE STANDARD TABLE
+      !iv_repid TYPE sy-repid .
+
 protected section.
 private section.
 
   data GT_EVENTS type SLIS_T_EVENT .
   data GT_EVENT_EXIT type SLIS_T_EVENT_EXIT .
+
+  methods FCAT_FILL_FROM_ITAB
+    importing
+      !TABLE type ref to DATA .
+
 ENDCLASS.
 
 
@@ -219,7 +268,22 @@ CLASS ZCL_BC_ALV IMPLEMENTATION.
   endmethod.
 
 
-  method constructor.
+  METHOD check_changed.
+    DATA lo_ref_grid TYPE REF TO cl_gui_alv_grid.
+    IF lo_ref_grid IS INITIAL.
+      CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+        IMPORTING
+          e_grid = lo_ref_grid.
+    ENDIF.
+    IF NOT lo_ref_grid IS INITIAL.
+      CALL METHOD lo_ref_grid->check_changed_data .
+    ENDIF.
+
+
+  ENDMETHOD.
+
+
+  METHOD constructor.
 
     gv_itab_name = iv_itab_name.
     gv_strc_name = iv_strc_name.
@@ -230,37 +294,64 @@ CLASS ZCL_BC_ALV IMPLEMENTATION.
     gv_topp_name = iv_topp_name.
     gv_html_end_name = iv_html_end_name.
 
-    me->set_default_layout( ).
+    IF gv_prog_name  IS INITIAL.
+       gv_prog_name  = sy-cprog.
+    ENDIF.
 
-    if gv_itab_name is not initial.
-      call method me->t_merge
-        changing
+    IF gv_incl_name IS NOT INITIAL AND
+       gv_prog_name IS INITIAL.
+       gv_prog_name = gv_incl_name.
+    ENDIF.
+
+    IF is_layout IS NOT INITIAL .
+       gs_layout = is_layout.
+    ELSE.
+       me->set_default_layout( ).
+    ENDIF.
+
+    IF is_variant IS NOT INITIAL.
+       gs_variant = is_variant.
+    ENDIF.
+
+    IF gv_itab_name IS NOT INITIAL.
+      CALL METHOD me->t_merge
+        CHANGING
           rt_fcat = me->gt_fcat.
 
-    elseif gv_strc_name is not initial.
-      call method me->s_merge
-        changing
+    ELSEIF gv_strc_name IS NOT INITIAL.
+      CALL METHOD me->s_merge
+        CHANGING
           rt_fcat = me->gt_fcat.
-    endif.
+    ELSE.
+      fcat_fill_from_itab( ir_data ).
+    ENDIF.
 
 
-    try.
+    TRY.
         me->gt_fcat[ fieldname = 'SEL' ]-tech = abap_true.
-      catch cx_sy_itab_line_not_found ##NO_HANDLER.
-    endtry.
+      CATCH cx_sy_itab_line_not_found ##NO_HANDLER.
+    ENDTRY.
 
-    try.
+    TRY.
         me->gt_fcat[ fieldname = 'SELKZ' ]-tech = abap_true.
-      catch cx_sy_itab_line_not_found ##NO_HANDLER.
-    endtry.
+      CATCH cx_sy_itab_line_not_found ##NO_HANDLER.
+    ENDTRY.
 
-    try.
+    TRY.
+        me->gt_fcat[ fieldname = 'CHK' ]-tech = abap_true.
+      CATCH cx_sy_itab_line_not_found ##NO_HANDLER.
+    ENDTRY.
+
+    TRY.
         me->gt_fcat[ fieldname = 'MARK' ]-tech = abap_true.
-      catch cx_sy_itab_line_not_found ##NO_HANDLER.
-    endtry.
+      CATCH cx_sy_itab_line_not_found ##NO_HANDLER.
+    ENDTRY.
 
+    IF ir_data IS SUPPLIED.
+       display( ir_data ).
+    ENDIF.
 
-  endmethod.
+  ENDMETHOD.
 
 
   method display.
@@ -291,6 +382,7 @@ CLASS ZCL_BC_ALV IMPLEMENTATION.
           is_variant             = gs_variant
           is_layout              = gs_layout
           it_fieldcat            = gt_fcat
+          i_default              = iv_default
           it_events              = gt_events[]
           it_event_exit          = gt_event_exit[]
         tables
@@ -310,6 +402,7 @@ CLASS ZCL_BC_ALV IMPLEMENTATION.
           is_variant               = gs_variant
           is_layout                = gs_layout
           it_fieldcat              = gt_fcat
+          i_default              = iv_default
           it_events                = gt_events[]
           it_event_exit            = gt_event_exit[]
         tables
@@ -318,6 +411,68 @@ CLASS ZCL_BC_ALV IMPLEMENTATION.
 
 
   endmethod.
+
+
+  METHOD exclude_tb_functions.
+
+    DATA ls_exclude TYPE ui_func.
+
+    FREE: ct_exc.
+
+    ls_exclude = cl_gui_alv_grid=>mc_fc_refresh.
+    APPEND ls_exclude TO ct_exc.
+    ls_exclude = cl_gui_alv_grid=>mc_fc_loc_copy_row.
+    APPEND ls_exclude TO ct_exc.
+    ls_exclude = cl_gui_alv_grid=>mc_fc_loc_append_row.
+    APPEND ls_exclude TO ct_exc.
+    ls_exclude = cl_gui_alv_grid=>mc_fc_loc_move_row.
+    APPEND ls_exclude TO ct_exc.
+    ls_exclude = cl_gui_alv_grid=>mc_fc_loc_copy.
+    APPEND ls_exclude TO ct_exc.
+    ls_exclude = cl_gui_alv_grid=>mc_fc_loc_cut.
+    APPEND ls_exclude TO ct_exc.
+    ls_exclude = cl_gui_alv_grid=>mc_fc_loc_undo.
+    APPEND ls_exclude TO ct_exc.
+    ls_exclude = cl_gui_alv_grid=>mc_fc_loc_paste.
+    APPEND ls_exclude TO ct_exc.
+    ls_exclude = cl_gui_alv_grid=>mc_fc_loc_paste_new_row.
+    APPEND ls_exclude TO ct_exc.
+    ls_exclude = cl_gui_alv_grid=>mc_fc_loc_insert_row.
+    APPEND ls_exclude TO ct_exc.
+    ls_exclude = cl_gui_alv_grid=>mc_fc_loc_delete_row.
+    APPEND ls_exclude TO ct_exc.
+    APPEND  cl_gui_alv_grid=>mc_fc_info   TO ct_exc.
+    APPEND  cl_gui_alv_grid=>mc_fc_graph  TO ct_exc.
+    APPEND  cl_gui_alv_grid=>mc_fc_print  TO ct_exc.
+
+  ENDMETHOD.
+
+
+ METHOD fcat_fill_from_itab.
+
+    DATA : delete_initial_line.
+
+    FIELD-SYMBOLS <table> TYPE STANDARD TABLE.
+
+    ASSIGN table->* TO <table>.
+    CHECK sy-subrc IS INITIAL.
+
+    IF <table> IS INITIAL.
+       delete_initial_line = abap_true.
+       APPEND INITIAL LINE TO <table> ASSIGNING FIELD-SYMBOL(<line>).
+    ELSE.
+      READ TABLE <table> ASSIGNING <line> INDEX 1.
+    ENDIF.
+
+    DATA(line_def)  = cl_abap_typedescr=>describe_by_data_ref( REF #( <line> ) ).
+    gv_strc_name = line_def->get_relative_name( ).
+    me->s_merge( CHANGING rt_fcat = me->gt_fcat ).
+
+    IF delete_initial_line EQ abap_true.
+       DELETE <table> INDEX 1.
+    ENDIF.
+
+  ENDMETHOD.
 
 
   method find_selection_paremeters.
@@ -422,6 +577,13 @@ CLASS ZCL_BC_ALV IMPLEMENTATION.
   endmethod.
 
 
+  METHOD gui_refresh.
+
+  cl_gui_cfw=>set_new_ok_code( 'REFRESH' ).
+
+  ENDMETHOD.
+
+
   method LVC_MERGE.
 
     clear : rt_fcat.
@@ -441,6 +603,111 @@ CLASS ZCL_BC_ALV IMPLEMENTATION.
                     display like 'E'.
     endif.
   endmethod.
+
+
+  METHOD modify_cell.
+
+    DATA :
+        lo_struc TYPE REF TO cl_abap_structdescr,
+        lt_comp  TYPE        cl_abap_structdescr=>component_table,
+        lv_fname TYPE        lvc_fname.
+
+    CHECK iv_row_id IS NOT INITIAL.
+    CHECK it_changed IS NOT INITIAL.
+    IF it_fname IS INITIAL.
+       lo_struc  ?= cl_abap_structdescr=>describe_by_data( is_data ).
+       lt_comp = lo_struc->get_components( ).
+       LOOP AT lt_comp INTO DATA(ls_comp).
+         lv_fname =  ls_comp-name.
+         COLLECT lv_fname INTO it_fname.
+       ENDLOOP.
+    ENDIF.
+    CHECK it_fname IS NOT INITIAL.
+    LOOP AT it_fname INTO lv_fname.
+       ASSIGN COMPONENT lv_fname OF STRUCTURE is_data TO FIELD-SYMBOL(<lv_value>).
+       CHECK sy-subrc EQ 0.
+        it_changed->modify_cell(
+            EXPORTING
+              i_row_id    = iv_row_id
+              i_fieldname = lv_fname
+              i_value     = <lv_value> ).
+    ENDLOOP.
+  ENDMETHOD.
+
+
+  METHOD popup_alv.
+
+    DATA :  lo_alv TYPE REF TO cl_salv_table,
+                lr_columns    TYPE REF TO cl_salv_columns_table,
+                lr_column     TYPE REF TO cl_salv_column_table.
+      TRY.
+          cl_salv_table=>factory(
+            IMPORTING
+              r_salv_table = lo_alv
+            CHANGING
+              t_table      = it_data ).
+
+        CATCH cx_salv_msg.
+      ENDTRY.
+
+      DATA: lr_functions TYPE REF TO cl_salv_functions_list,
+            lr_display  TYPE REF TO cl_salv_display_settings.
+
+      lr_functions = lo_alv->get_functions( ).
+      lr_functions->set_all( 'X' ).
+
+      lr_display = lo_alv->get_display_settings( ).
+      lr_display->set_list_header( iv_title ).
+
+
+      lr_columns = lo_alv->get_columns( ).
+      lr_columns->set_optimize( abap_true ).
+
+
+      IF lo_alv IS BOUND.
+          lo_alv->set_screen_popup(
+            start_column = iv_start_column
+            end_column   = iv_end_column
+            start_line   = iv_start_line
+            end_line     = iv_end_line
+            ).
+
+         lo_alv->set_screen_status( pfstatus = 'DUMMY'
+                                    report = iv_repid ).
+
+         lo_alv->display( ).
+
+      ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD refresh.
+    DATA ls_stable TYPE lvc_s_stbl VALUE 'XX'.
+    io_grid->refresh_table_display( EXPORTING is_stable = ls_stable ).
+  ENDMETHOD.
+
+
+  METHOD register_edit.
+
+*   Registering the EDIT Event
+
+      CALL METHOD co_grid->register_edit_event
+        EXPORTING
+          i_event_id = cl_gui_alv_grid=>mc_evt_modified
+        EXCEPTIONS
+          error      = 1
+          OTHERS     = 2 .
+
+*   Set editable cells to ready for input initially
+
+      co_grid->set_ready_for_input(
+        EXPORTING
+          i_ready_for_input = 1 ).
+
+      co_grid->set_toolbar_interactive( ).
+
+  ENDMETHOD.
 
 
   method set_default_layout.
@@ -466,6 +733,31 @@ CLASS ZCL_BC_ALV IMPLEMENTATION.
   method set_layout.
      gs_layout = is_layout.
   endmethod.
+
+
+  METHOD set_style.
+
+  DATA ls_styl TYPE LINE OF lvc_t_styl.
+
+
+   READ TABLE ct_styl INTO ls_styl WITH KEY fieldname = iv_field.
+   IF sy-subrc IS INITIAL.
+     IF iv_type EQ 'D'.
+      ls_styl-style = cl_gui_alv_grid=>mc_style_disabled.
+     ELSE.
+      ls_styl-style = cl_gui_alv_grid=>mc_style_enabled.
+     ENDIF.
+     MODIFY ct_styl FROM ls_styl INDEX sy-tabix.
+   ELSE.
+     ls_styl-fieldname = iv_field.
+     IF iv_type EQ 'D'.
+      ls_styl-style = cl_gui_alv_grid=>mc_style_disabled.
+     ELSE.
+      ls_styl-style = cl_gui_alv_grid=>mc_style_enabled.
+     ENDIF.
+     INSERT ls_styl INTO TABLE  ct_styl.
+   ENDIF.
+  ENDMETHOD.
 
 
   method set_text.

@@ -5,195 +5,333 @@ CLASS zcl_sd_customer DEFINITION
 
   PUBLIC SECTION.
 
-    CONSTANTS c_fnam_kunnr TYPE fieldname VALUE 'KUNNR'.
-
     TYPES:
       tt_kunnr
-        TYPE STANDARD TABLE OF kunnr
-        WITH DEFAULT KEY,
-
+              TYPE STANDARD TABLE OF kunnr
+              WITH DEFAULT KEY .
+    TYPES:
       tt_parob
-        TYPE STANDARD TABLE OF zsdt_cus_parob
-        WITH DEFAULT KEY.
+              TYPE STANDARD TABLE OF zsdt_cus_parob
+              WITH DEFAULT KEY .
 
-    DATA gs_def TYPE kna1 READ-ONLY.
+    CONSTANTS:
+      BEGIN OF c_fnam,
+        kunnr TYPE fieldname VALUE 'KUNNR',
+        name1 TYPE fieldname VALUE 'NAME1',
+        name3 TYPE fieldname VALUE 'NAME3',
+      END OF c_fnam .
+    CONSTANTS:
+      BEGIN OF c_fatura_kapsami,
+        e_arsiv  TYPE zfid_fatura_kapsami_v VALUE 'EA',
+        e_fatura TYPE zfid_fatura_kapsami_v VALUE 'EF',
+        kagit    TYPE zfid_fatura_kapsami_v VALUE 'KA',
+      END OF c_fatura_kapsami .
+    CONSTANTS:
+      BEGIN OF c_purpose,
+        mutabakat TYPE zsdd_invoice_read_purpose VALUE 'MUTABAKAT',
+      END OF c_purpose .
+    DATA gs_def TYPE kna1 READ-ONLY .
 
-    CLASS-METHODS:
-      cache_kna1
-        IMPORTING
-          !ir_tab  TYPE REF TO data
-          !iv_fnam TYPE fieldname DEFAULT c_fnam_kunnr
-        RAISING
-          zcx_bc_class_method,
+    CLASS-METHODS cache_kna1
+      IMPORTING
+        !ir_tab  TYPE REF TO data
+        !iv_fnam TYPE fieldname DEFAULT c_fnam-kunnr
+      RAISING
+        zcx_bc_class_method .
+    CLASS-METHODS cache_name1
+      IMPORTING
+        !ir_tab  TYPE REF TO data
+        !iv_fnam TYPE fieldname DEFAULT c_fnam-kunnr
+      RAISING
+        zcx_bc_class_method .
+    CLASS-METHODS conv_exit_kunnr_input
+      IMPORTING
+        !iv_kunnr       TYPE kunnr
+      RETURNING
+        VALUE(rv_kunnr) TYPE kunnr .
+    CLASS-METHODS ensure_obl_part_funcs_filled
+      IMPORTING
+        !it_vkorg TYPE zcl_sd_sales_org=>tt_vkorg
+        !it_parob TYPE tt_parob
+      RAISING
+        zcx_sd_parob .
+    CLASS-METHODS get_def_land_sd_values
+      IMPORTING
+        !iv_land1     TYPE land1
+      RETURNING
+        VALUE(rs_val) TYPE zfit_xd_def_lsd_fld
+      RAISING
+        zcx_bc_table_content .
+    CLASS-METHODS get_def_tax_codes
+      IMPORTING
+        !iv_ktokd     TYPE ktokd
+      RETURNING
+        VALUE(rs_val) TYPE zfit_xd_def_stc_fld
+      RAISING
+        zcx_bc_table_content .
+    CLASS-METHODS get_hq_branch_codes
+      IMPORTING
+        !iv_need_hq     TYPE abap_bool DEFAULT abap_true
+        !iv_need_br     TYPE abap_bool DEFAULT abap_true
+        !it_bukrs       TYPE tpmy_range_bukrs OPTIONAL
+        !it_knrze       TYPE range_kunnr_tab OPTIONAL
+      RETURNING
+        VALUE(rt_kunnr) TYPE tt_kunnr .
+    CLASS-METHODS get_instance
+      IMPORTING
+        !iv_kunnr     TYPE kunnr
+      RETURNING
+        VALUE(ro_obj) TYPE REF TO zcl_sd_customer
+      RAISING
+        zcx_sd_customer_def .
 
-      cache_name1
-        IMPORTING
-          !ir_tab  TYPE REF TO data
-          !iv_fnam TYPE fieldname DEFAULT c_fnam_kunnr
-        RAISING
-          zcx_bc_class_method,
+    CLASS-METHODS get_invoice_scope_by_address
+      IMPORTING
+        !iv_adrnr       TYPE adrc-addrnumber
+        !iv_purpose     TYPE zsdd_invoice_read_purpose OPTIONAL
+      RETURNING
+        VALUE(rv_scope) TYPE zfid_fatura_kapsami_v
+      RAISING
+        zcx_sd_doc_inv_scope .
 
-      ensure_obl_part_funcs_filled
-        IMPORTING
-          !it_vkorg TYPE zcl_sd_sales_org=>tt_vkorg
-          !it_parob TYPE tt_parob
-        RAISING
-          zcx_sd_parob,
+    CLASS-METHODS get_invoice_scope_by_delivery
+      IMPORTING
+        !iv_vbeln       TYPE vbeln_vl
+        !iv_purpose     TYPE zsdd_invoice_read_purpose OPTIONAL
+      RETURNING
+        VALUE(rv_scope) TYPE zfid_fatura_kapsami_v
+      RAISING
+        zcx_sd_doc_inv_scope .
+    CLASS-METHODS get_invoice_scope_by_partner
+      IMPORTING
+        !iv_vbeln       TYPE vbeln
+        !iv_purpose     TYPE zsdd_invoice_read_purpose OPTIONAL
+      RETURNING
+        VALUE(rv_scope) TYPE zfid_fatura_kapsami_v
+      RAISING
+        zcx_sd_doc_inv_scope .
+    CLASS-METHODS get_invoice_scope_by_tax
+      IMPORTING
+        !iv_stcd2       TYPE stcd2
+        !iv_purpose     TYPE zsdd_invoice_read_purpose OPTIONAL
+      RETURNING
+        VALUE(rv_scope) TYPE zfid_fatura_kapsami_v .
+    CLASS-METHODS get_kna1
+      IMPORTING
+        !iv_kunnr      TYPE kunnr
+      RETURNING
+        VALUE(rs_kna1) TYPE kna1 .
+    CLASS-METHODS get_knvv
+      IMPORTING
+        !iv_kunnr      TYPE knvv-kunnr
+        !iv_vkorg      TYPE knvv-vkorg
+        !iv_vtweg      TYPE knvv-vtweg
+        !iv_spart      TYPE knvv-spart
+      RETURNING
+        VALUE(rs_knvv) TYPE knvv .
+    CLASS-METHODS get_name1
+      IMPORTING
+        !iv_kunnr       TYPE kunnr
+      RETURNING
+        VALUE(rv_name1) TYPE name1_gp .
 
-      get_def_land_sd_values
-        IMPORTING !iv_land1     TYPE land1
-        RETURNING VALUE(rs_val) TYPE zfit_xd_def_lsd_fld
-        RAISING   zcx_bc_table_content,
+    CLASS-METHODS put_name1_into_itab
+      IMPORTING
+        !ir_itab        TYPE REF TO data
+        !iv_kunnr_field TYPE fieldname
+        !iv_name1_field TYPE fieldname.
 
-      get_def_tax_codes
-        IMPORTING !iv_ktokd     TYPE ktokd
-        RETURNING VALUE(rs_val) TYPE zfit_xd_def_stc_fld
-        RAISING   zcx_bc_table_content,
+    CLASS-METHODS set_head_customer_if_found
+      IMPORTING
+        !iv_bukrs TYPE bukrs
+      CHANGING
+        !cv_kunnr TYPE kunnr .
 
-      get_hq_branch_codes
-        IMPORTING
-          !iv_need_hq     TYPE abap_bool DEFAULT abap_true
-          !iv_need_br     TYPE abap_bool DEFAULT abap_true
-          !it_bukrs       TYPE tpmy_range_bukrs OPTIONAL
-          !it_knrze       TYPE range_kunnr_tab OPTIONAL
-        RETURNING
-          VALUE(rt_kunnr) TYPE tt_kunnr,
+    METHODS ensure_defined_in_dist_channel
+      IMPORTING
+        !iv_vkorg TYPE vkorg
+        !iv_vtweg TYPE vtweg
+      RAISING
+        cx_no_entry_in_table.
 
-      get_instance
-        IMPORTING !iv_kunnr     TYPE kunnr
-        RETURNING VALUE(ro_obj) TYPE REF TO zcl_sd_customer
-        RAISING   zcx_sd_customer_def,
+    METHODS get_head_customer
+      IMPORTING
+        !iv_bukrs      TYPE bukrs
+      RETURNING
+        VALUE(ro_head) TYPE REF TO zcl_sd_customer
+      RAISING
+        zcx_sd_customer_hq_def .
 
-      get_kna1
-        IMPORTING !iv_kunnr      TYPE kunnr
-        RETURNING VALUE(rs_kna1) TYPE kna1 ,
+    METHODS get_invoice_scope
+      RETURNING
+        VALUE(rv_scope) TYPE zfid_fatura_kapsami_v .
 
-      get_knvv
-        IMPORTING
-          !iv_kunnr      TYPE knvv-kunnr
-          !iv_vkorg      TYPE knvv-vkorg
-          !iv_vtweg      TYPE knvv-vtweg
-          !iv_spart      TYPE knvv-spart
-        RETURNING
-          VALUE(rs_knvv) TYPE knvv,
+    METHODS get_transport_zone
+      RETURNING
+        VALUE(ro_obj) TYPE REF TO zcl_sd_transport_zone
+      RAISING
+        zcx_sd_tzone .
 
-      get_name1
-        IMPORTING
-          !iv_kunnr       TYPE kunnr
-        RETURNING
-          VALUE(rv_name1) TYPE name1_gp,
+    METHODS is_employer RETURNING VALUE(rv_employer) TYPE abap_bool.
 
-      set_head_customer_if_found
-        IMPORTING !iv_bukrs TYPE bukrs
-        CHANGING  !cv_kunnr TYPE kunnr.
+    METHODS get_land
+      RETURNING VALUE(output) TYPE REF TO zcl_bc_land
+      RAISING   cx_no_entry_in_table.
 
+    METHODS is_eu_member
+      RETURNING VALUE(output) TYPE abap_bool
+      RAISING   cx_no_entry_in_table.
 
-    METHODS:
-      get_head_customer
-        IMPORTING !iv_bukrs      TYPE bukrs
-        RETURNING VALUE(ro_head) TYPE REF TO zcl_sd_customer
-        RAISING   zcx_sd_customer_hq_def,
-
-      get_transport_zone
-        RETURNING VALUE(ro_obj) TYPE REF TO zcl_sd_transport_zone
-        RAISING   zcx_sd_tzone.
+    METHODS is_multi_cargo RETURNING VALUE(result) TYPE abap_bool.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
 
     TYPES:
       tt_def_stc
-        TYPE HASHED TABLE OF zfit_xd_def_stc
-        WITH UNIQUE KEY primary_key COMPONENTS ktokd,
-
-      tt_land1_rng TYPE RANGE OF land1,
-
+          TYPE HASHED TABLE OF zfit_xd_def_stc
+          WITH UNIQUE KEY primary_key COMPONENTS ktokd .
+    TYPES:
+      tt_land1_rng TYPE RANGE OF land1 .
+    TYPES:
       BEGIN OF t_def_land_sd_val,
         land1_rng TYPE tt_land1_rng,
         val       TYPE zfit_xd_def_lsd_fld,
-      END OF t_def_land_sd_val,
-
+      END OF t_def_land_sd_val .
+    TYPES:
       tt_def_land_sd_val
-        TYPE STANDARD TABLE OF t_def_land_sd_val
-        WITH DEFAULT KEY,
-
+          TYPE STANDARD TABLE OF t_def_land_sd_val
+          WITH DEFAULT KEY .
+    TYPES:
       BEGIN OF t_def_lsv_cache,
         land1 TYPE land1,
         val   TYPE zfit_xd_def_lsd_fld,
         cx    TYPE REF TO zcx_bc_table_content,
-      END OF t_def_lsv_cache,
-
+      END OF t_def_lsv_cache .
+    TYPES:
       tt_def_lsv_cache
-        TYPE HASHED TABLE OF t_def_lsv_cache
-        WITH UNIQUE KEY primary_key COMPONENTS land1,
-
+          TYPE HASHED TABLE OF t_def_lsv_cache
+          WITH UNIQUE KEY primary_key COMPONENTS land1 .
+    TYPES:
       BEGIN OF t_clazy_flg,
         def_land_sd_val TYPE abap_bool,
         parob           TYPE abap_bool,
-      END OF t_clazy_flg,
-
+      END OF t_clazy_flg .
+    TYPES:
       BEGIN OF t_clazy_val,
         def_land_sd_val TYPE tt_def_land_sd_val,
         parob           TYPE tt_parob,
-      END OF t_clazy_val,
-
+      END OF t_clazy_val .
+    TYPES:
       BEGIN OF t_clazy,
         flg TYPE t_clazy_flg,
         val TYPE t_clazy_val,
-      END OF t_clazy,
-
+      END OF t_clazy .
+    TYPES:
       BEGIN OF t_hq,
         bukrs TYPE bukrs,
         knrze TYPE knrze,
         obj   TYPE REF TO zcl_sd_customer,
         cx    TYPE REF TO zcx_sd_customer_hq_def,
-      END OF t_hq,
-
+      END OF t_hq .
+    TYPES:
       tt_hq
-        TYPE HASHED TABLE OF t_hq
-        WITH UNIQUE KEY primary_key COMPONENTS bukrs,
-
+          TYPE HASHED TABLE OF t_hq
+          WITH UNIQUE KEY primary_key COMPONENTS bukrs .
+    TYPES:
       tt_knvv
-        TYPE HASHED TABLE OF knvv
-        WITH UNIQUE KEY primary_key COMPONENTS kunnr vkorg vtweg spart,
-
+          TYPE HASHED TABLE OF knvv
+          WITH UNIQUE KEY primary_key COMPONENTS kunnr vkorg vtweg spart .
+    TYPES:
       BEGIN OF t_multiton,
         kunnr TYPE kna1-kunnr,
         obj   TYPE REF TO zcl_sd_customer,
-      END OF t_multiton,
-
-      tt_multiton TYPE HASHED TABLE OF t_multiton WITH UNIQUE KEY primary_key COMPONENTS kunnr,
-
+      END OF t_multiton .
+    TYPES:
+      tt_multiton TYPE HASHED TABLE OF t_multiton WITH UNIQUE KEY primary_key COMPONENTS kunnr .
+    TYPES:
       BEGIN OF t_name1,
         kunnr TYPE kna1-kunnr,
         name1 TYPE kna1-name1,
-      END OF t_name1,
+      END OF t_name1 .
+    TYPES:
+      tt_name1 TYPE HASHED TABLE OF t_name1 WITH UNIQUE KEY primary_key COMPONENTS kunnr .
+    TYPES:
+      BEGIN OF t_fatura_kapsami_cache,
+        stcd2          TYPE stcd2,
+        purpose        TYPE zsdd_invoice_read_purpose,
+        fatura_kapsami TYPE zfid_fatura_kapsami_v,
+      END OF t_fatura_kapsami_cache .
+    TYPES:
+      tt_fatura_kapsami_cache
+          TYPE HASHED TABLE OF t_fatura_kapsami_cache
+          WITH UNIQUE KEY primary_key COMPONENTS stcd2 purpose.
 
-      tt_name1 TYPE HASHED TABLE OF t_name1 WITH UNIQUE KEY primary_key COMPONENTS kunnr.
+    TYPES tt_fatura_kapsami TYPE STANDARD TABLE OF zfid_fatura_kapsami_v WITH DEFAULT KEY.
+
+    TYPES: BEGIN OF t_dist_chan_cache,
+             vkorg TYPE vkorg,
+             vtweg TYPE vtweg,
+             error TYPE REF TO cx_no_entry_in_table,
+           END OF t_dist_chan_cache,
+
+           tt_dist_chan_cache TYPE HASHED TABLE OF t_dist_chan_cache
+                              WITH UNIQUE KEY primary_key COMPONENTS vkorg vtweg.
+
+    TYPES: BEGIN OF t_lazy_flg,
+             multi_cargo TYPE abap_bool,
+           END OF t_lazy_flg,
+
+           BEGIN OF t_lazy_val,
+             multi_cargo TYPE abap_bool,
+           END OF t_lazy_val,
+
+           BEGIN OF t_lazy,
+             flg TYPE t_lazy_flg,
+             val TYPE t_lazy_val,
+           END OF t_lazy.
 
     CONSTANTS:
-      c_clsname_me       TYPE seoclsname VALUE 'ZCL_SD_CUSTOMER',
-      c_meth_cache_wgbez TYPE seocpdname VALUE 'CACHE_NAME1',
-      c_tabname_def_stc  TYPE tabname    VALUE 'ZFIT_XD_DEF_STC',
-      c_tabname_lsd      TYPE tabname    VALUE 'ZFIT_XD_DEF_LSD'.
+      BEGIN OF c_parvw,
+        payer TYPE parvw VALUE 'RG',
+      END OF c_parvw,
 
+      BEGIN OF c_ktokd,
+        employer TYPE ktokd VALUE 'PERS',
+      END OF c_ktokd,
+
+      BEGIN OF c_tabname,
+        adrc    TYPE tabname VALUE 'ADRC',
+        def_stc TYPE tabname VALUE 'ZFIT_XD_DEF_STC',
+        knvv    TYPE tabname VALUE 'KNVV',
+        lsd     TYPE tabname VALUE 'ZFIT_XD_DEF_LSD',
+        vbpa    TYPE tabname VALUE 'VBPA',
+      END OF c_tabname.
+
+    CONSTANTS c_clsname_me TYPE seoclsname VALUE 'ZCL_SD_CUSTOMER' ##NO_TEXT.
+    CONSTANTS c_meth_cache_wgbez TYPE seocpdname VALUE 'CACHE_NAME1' ##NO_TEXT.
+
+    CLASS-DATA gs_clazy TYPE t_clazy .
+    CLASS-DATA gt_def_stc TYPE tt_def_stc .
+    CLASS-DATA gt_fatura_kapsami_cache TYPE tt_fatura_kapsami_cache .
+    CLASS-DATA gt_hq TYPE tt_hq .
     CLASS-DATA:
-      gs_clazy     TYPE t_clazy,
-      gt_def_stc   TYPE tt_def_stc,
-      gt_hq        TYPE tt_hq,
-      gt_kna1      TYPE HASHED TABLE OF kna1 WITH UNIQUE KEY primary_key COMPONENTS kunnr,
-      gt_knvv      TYPE tt_knvv,
-      gt_lsv_cache TYPE tt_def_lsv_cache,
-      gt_multiton  TYPE tt_multiton,
-      gt_name1     TYPE tt_name1.
+      gt_kna1                 TYPE HASHED TABLE OF kna1 WITH UNIQUE KEY primary_key COMPONENTS kunnr .
+    CLASS-DATA gt_knvv TYPE tt_knvv .
+    CLASS-DATA gt_lsv_cache TYPE tt_def_lsv_cache .
+    CLASS-DATA gt_multiton TYPE tt_multiton .
+    CLASS-DATA gt_name1 TYPE tt_name1 .
 
-    CLASS-METHODS:
-      read_parob_lazy.
+    DATA: gt_dist_chan_cache TYPE tt_dist_chan_cache,
+          gs_lazy            TYPE t_lazy.
+
+    CLASS-METHODS read_parob_lazy .
 ENDCLASS.
 
 
 
 CLASS zcl_sd_customer IMPLEMENTATION.
+
 
   METHOD cache_kna1.
 
@@ -204,11 +342,14 @@ CLASS zcl_sd_customer IMPLEMENTATION.
       <lt_tab>   TYPE ANY TABLE,
       <lv_kunnr> TYPE any.
 
+    CHECK ir_tab IS NOT INITIAL.
+
     TRY.
 
-        CHECK ir_tab IS NOT INITIAL.
         ASSIGN ir_tab->* TO <lt_tab>.
-        CHECK <lt_tab> IS ASSIGNED.
+        IF <lt_tab> IS NOT ASSIGNED.
+          RETURN.
+        ENDIF.
 
         LOOP AT <lt_tab> ASSIGNING FIELD-SYMBOL(<ls_tab>).
 
@@ -226,7 +367,9 @@ CLASS zcl_sd_customer IMPLEMENTATION.
 
         ENDLOOP.
 
-        CHECK lt_kunnr_rng IS NOT INITIAL.
+        IF lt_kunnr_rng IS INITIAL.
+          RETURN.
+        ENDIF.
 
         SELECT *
           FROM kna1
@@ -246,6 +389,7 @@ CLASS zcl_sd_customer IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD cache_name1.
 
     DATA:
@@ -255,11 +399,14 @@ CLASS zcl_sd_customer IMPLEMENTATION.
       <lt_tab>   TYPE ANY TABLE,
       <lv_kunnr> TYPE any.
 
+    CHECK ir_tab IS NOT INITIAL.
+
     TRY.
 
-        CHECK ir_tab IS NOT INITIAL.
         ASSIGN ir_tab->* TO <lt_tab>.
-        CHECK <lt_tab> IS ASSIGNED.
+        IF <lt_tab> IS NOT ASSIGNED.
+          RETURN.
+        ENDIF.
 
         LOOP AT <lt_tab> ASSIGNING FIELD-SYMBOL(<ls_tab>).
 
@@ -277,7 +424,9 @@ CLASS zcl_sd_customer IMPLEMENTATION.
 
         ENDLOOP.
 
-        CHECK lt_kunnr_rng IS NOT INITIAL.
+        IF lt_kunnr_rng IS INITIAL.
+          RETURN.
+        ENDIF.
 
         SELECT kunnr, name1 APPENDING CORRESPONDING FIELDS OF TABLE @gt_name1
           FROM kna1
@@ -297,15 +446,56 @@ CLASS zcl_sd_customer IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD conv_exit_kunnr_input.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = iv_kunnr
+      IMPORTING
+        output = rv_kunnr.
+
+  ENDMETHOD.
+
+
+  METHOD ensure_defined_in_dist_channel.
+    ASSIGN gt_dist_chan_cache[ KEY primary_key COMPONENTS
+                               vkorg = iv_vkorg
+                               vtweg = iv_vtweg
+                             ] TO FIELD-SYMBOL(<ls_cache>).
+    IF sy-subrc NE 0.
+      DATA(ls_cache) = VALUE t_dist_chan_cache( vkorg = iv_vkorg
+                                                vtweg = iv_vtweg ).
+
+      SELECT SINGLE mandt FROM knvv
+             WHERE kunnr EQ @gs_def-kunnr   AND
+                   vkorg EQ @ls_cache-vkorg AND
+                   vtweg EQ @ls_cache-vtweg AND
+                   loevm EQ @abap_false
+             INTO @sy-mandt ##write_ok.                 "#EC CI_NOORDER
+
+      IF sy-subrc NE 0.
+        ls_cache-error = NEW #( table_name = CONV #( c_tabname-knvv )
+                                entry_name = |{ gs_def-kunnr } { ls_cache-vkorg } { ls_cache-vtweg }| ).
+      ENDIF.
+
+      INSERT ls_cache INTO TABLE gt_dist_chan_cache ASSIGNING <ls_cache>.
+    ENDIF.
+
+    IF <ls_cache>-error IS NOT INITIAL.
+      RAISE EXCEPTION <ls_cache>-error.
+    ENDIF.
+  ENDMETHOD.
+
+
   METHOD ensure_obl_part_funcs_filled.
 
-    CHECK (
-        it_vkorg IS NOT INITIAL AND
-        it_parob IS NOT INITIAL
-    ).
+    CHECK it_vkorg IS NOT INITIAL AND
+          it_parob IS NOT INITIAL.
 
     read_parob_lazy( ).
-    CHECK gs_clazy-val-parob IS NOT INITIAL.
+    IF gs_clazy-val-parob IS INITIAL.
+      RETURN.
+    ENDIF.
 
     DATA(lt_vkorg_rng) = VALUE zcl_sd_sales_org=>tt_vkorg_rng(
         FOR GROUPS gr1 OF ls_vkorg IN it_vkorg
@@ -340,6 +530,97 @@ CLASS zcl_sd_customer IMPLEMENTATION.
           parvw  = <ls_parob>-parvw.
 
     ENDLOOP.
+
+  ENDMETHOD.
+
+
+  METHOD get_def_land_sd_values.
+
+    ASSIGN gt_lsv_cache[
+        KEY primary_key COMPONENTS
+        land1 = iv_land1
+      ] TO FIELD-SYMBOL(<ls_cache>).
+
+    IF sy-subrc NE 0.
+
+      DATA(ls_cache) = VALUE t_def_lsv_cache( land1 = iv_land1 ).
+
+      IF gs_clazy-flg-def_land_sd_val EQ abap_false.
+
+        SELECT ddsign, land1 FROM zfit_xd_def_lsd INTO TABLE @DATA(lt_db). "#EC CI_NOWHERE
+
+        gs_clazy-val-def_land_sd_val = VALUE #(
+          FOR ls_db IN lt_db (
+            val = CORRESPONDING #( ls_db )
+            land1_rng = VALUE #( (
+              option = zcl_bc_ddic_toolkit=>c_option_eq
+              sign   = ls_db-ddsign
+              low    = ls_db-land1
+            ) )
+          )
+        ).
+
+        gs_clazy-flg-def_land_sd_val = abap_true.
+      ENDIF.
+
+      DATA(lv_found) = abap_false.
+
+      LOOP AT gs_clazy-val-def_land_sd_val ASSIGNING FIELD-SYMBOL(<ls_db>).
+        CHECK ls_cache-land1 IN <ls_db>-land1_rng.
+        ls_cache-val = <ls_db>-val.
+        lv_found = abap_true.
+      ENDLOOP.
+
+      IF lv_found IS INITIAL.
+        ls_cache-cx = NEW #(
+          textid    = zcx_bc_table_content=>entry_missing
+          objectid  = CONV #( ls_cache-land1 )
+          tabname   = c_tabname-lsd
+        ).
+      ENDIF.
+
+      INSERT ls_cache
+        INTO TABLE gt_lsv_cache
+        ASSIGNING <ls_cache>.
+
+    ENDIF.
+
+    IF <ls_cache>-cx IS NOT INITIAL.
+      RAISE EXCEPTION <ls_cache>-cx.
+    ENDIF.
+
+    rs_val = <ls_cache>-val.
+
+  ENDMETHOD.
+
+
+  METHOD get_def_tax_codes.
+
+    IF gt_def_stc IS INITIAL.
+      SELECT * FROM zfit_xd_def_stc INTO TABLE @gt_def_stc. "#EC CI_NOWHERE
+      IF gt_def_stc IS INITIAL.
+        INSERT INITIAL LINE INTO TABLE gt_def_stc.
+      ENDIF.
+    ENDIF.
+
+    TRY.
+        rs_val = CORRESPONDING #(
+          gt_def_stc[
+            KEY primary_key COMPONENTS
+            ktokd = iv_ktokd
+          ]
+        ).
+
+      CATCH cx_sy_itab_line_not_found INTO DATA(lo_silnf).
+
+        RAISE EXCEPTION TYPE zcx_bc_table_content
+          EXPORTING
+            textid   = zcx_bc_table_content=>entry_missing
+            previous = lo_silnf
+            objectid = CONV #( iv_ktokd )
+            tabname  = c_tabname-def_stc.
+
+    ENDTRY.
 
   ENDMETHOD.
 
@@ -398,94 +679,6 @@ CLASS zcl_sd_customer IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD get_def_land_sd_values.
-
-    ASSIGN gt_lsv_cache[
-        KEY primary_key COMPONENTS
-        land1 = iv_land1
-      ] TO FIELD-SYMBOL(<ls_cache>).
-
-    IF sy-subrc NE 0.
-
-      DATA(ls_cache) = VALUE t_def_lsv_cache( land1 = iv_land1 ).
-
-      IF gs_clazy-flg-def_land_sd_val EQ abap_false.
-
-        SELECT ddsign, land1 FROM zfit_xd_def_lsd INTO TABLE @DATA(lt_db). "#EC CI_NOWHERE
-
-        gs_clazy-val-def_land_sd_val = VALUE #(
-          FOR ls_db IN lt_db (
-            val = CORRESPONDING #( ls_db )
-            land1_rng = VALUE #( (
-              option = zcl_bc_ddic_toolkit=>c_option_eq
-              sign   = ls_db-ddsign
-              low    = ls_db-land1
-            ) )
-          )
-        ).
-
-        gs_clazy-flg-def_land_sd_val = abap_true.
-      ENDIF.
-
-      DATA(lv_found) = abap_false.
-
-      LOOP AT gs_clazy-val-def_land_sd_val ASSIGNING FIELD-SYMBOL(<ls_db>).
-        CHECK ls_cache-land1 IN <ls_db>-land1_rng.
-        ls_cache-val = <ls_db>-val.
-        lv_found = abap_true.
-      ENDLOOP.
-
-      IF lv_found IS INITIAL.
-        ls_cache-cx = NEW #(
-          textid    = zcx_bc_table_content=>entry_missing
-          objectid  = CONV #( ls_cache-land1 )
-          tabname   = c_tabname_lsd
-        ).
-      ENDIF.
-
-      INSERT ls_cache
-        INTO TABLE gt_lsv_cache
-        ASSIGNING <ls_cache>.
-
-    ENDIF.
-
-    IF <ls_cache>-cx IS NOT INITIAL.
-      RAISE EXCEPTION <ls_cache>-cx.
-    ENDIF.
-
-    rs_val = <ls_cache>-val.
-
-  ENDMETHOD.
-
-  METHOD get_def_tax_codes.
-
-    IF gt_def_stc IS INITIAL.
-      SELECT * FROM zfit_xd_def_stc INTO TABLE @gt_def_stc. "#EC CI_NOWHERE
-      IF gt_def_stc IS INITIAL.
-        INSERT INITIAL LINE INTO TABLE gt_def_stc.
-      ENDIF.
-    ENDIF.
-
-    TRY.
-        rs_val = CORRESPONDING #(
-          gt_def_stc[
-            KEY primary_key COMPONENTS
-            ktokd = iv_ktokd
-          ]
-        ).
-
-      CATCH cx_sy_itab_line_not_found INTO DATA(lo_silnf).
-
-        RAISE EXCEPTION TYPE zcx_bc_table_content
-          EXPORTING
-            textid   = zcx_bc_table_content=>entry_missing
-            previous = lo_silnf
-            objectid = CONV #( iv_ktokd )
-            tabname  = c_tabname_def_stc.
-
-    ENDTRY.
-
-  ENDMETHOD.
 
   METHOD get_hq_branch_codes.
 
@@ -516,10 +709,12 @@ CLASS zcl_sd_customer IMPLEMENTATION.
 
   METHOD get_instance.
 
-    ASSIGN gt_multiton[ KEY primary_key COMPONENTS kunnr = iv_kunnr ] TO FIELD-SYMBOL(<ls_multiton>).
+    DATA(lv_kunnr) = zcl_sd_customer=>conv_exit_kunnr_input( iv_kunnr ).
+
+    ASSIGN gt_multiton[ KEY primary_key COMPONENTS kunnr = lv_kunnr ] TO FIELD-SYMBOL(<ls_multiton>).
     IF sy-subrc NE 0.
 
-      DATA(ls_multiton) = VALUE t_multiton( kunnr = iv_kunnr ).
+      DATA(ls_multiton) = VALUE t_multiton( kunnr = lv_kunnr ).
 
       ls_multiton-obj = NEW #( ).
 
@@ -538,6 +733,220 @@ CLASS zcl_sd_customer IMPLEMENTATION.
     ENDIF.
 
     ro_obj = <ls_multiton>-obj.
+
+  ENDMETHOD.
+
+
+  METHOD get_invoice_scope.
+    rv_scope = get_invoice_scope_by_tax( gs_def-stcd2 ).
+  ENDMETHOD.
+
+
+  METHOD get_invoice_scope_by_address.
+
+    DATA lt_split TYPE STANDARD TABLE OF ad_name3 WITH DEFAULT KEY.
+
+    TRY.
+
+        SELECT SINGLE name3
+          FROM adrc
+          WHERE
+            addrnumber EQ @iv_adrnr AND
+            date_from  LE @sy-datum AND
+            date_to    GE @sy-datum
+          INTO @DATA(lv_name3).                         "#EC CI_NOORDER
+
+        IF sy-subrc NE 0.
+          RAISE EXCEPTION TYPE cx_no_entry_in_table
+            EXPORTING
+              table_name = CONV #( c_tabname-adrc )
+              entry_name = |{ iv_adrnr } { sy-datum }|.
+        ENDIF.
+
+        SPLIT lv_name3 AT ':' INTO TABLE lt_split.
+
+        IF lines( lt_split ) EQ 2.
+          rv_scope = get_invoice_scope_by_tax(
+            iv_stcd2   = CONV #( lt_split[ 2 ] )
+            iv_purpose = iv_purpose
+          ).
+        ELSE.
+          rv_scope = c_fatura_kapsami-e_arsiv.
+        ENDIF.
+
+
+      CATCH zcx_sd_doc_inv_scope INTO DATA(lo_cx_scope).
+        RAISE EXCEPTION lo_cx_scope.
+
+      CATCH cx_root INTO DATA(lo_diaper).
+        RAISE EXCEPTION TYPE zcx_sd_doc_inv_scope
+          EXPORTING
+            textid   = zcx_sd_doc_inv_scope=>cant_determine_for_address
+            previous = lo_diaper
+            adrnr    = iv_adrnr.
+
+    ENDTRY.
+
+  ENDMETHOD.
+
+
+  METHOD get_invoice_scope_by_delivery.
+
+    TRY.
+
+        DATA(lv_delivery_customer_code) = zcl_sd_delivery=>get_instance( iv_vbeln )->gs_head-kunnr.
+        DATA(lo_delivery_customer) = zcl_sd_customer=>get_instance( lv_delivery_customer_code ).
+
+        CASE lo_delivery_customer->is_employer( ).
+          WHEN abap_true.  " PERS durumu """"""""""""""""""""""""""""""""""""""""""""""""""""""
+
+            DATA(lt_scope) = VALUE tt_fatura_kapsami(
+              FOR _vbeln_va IN zcl_sd_delivery=>get_instance( iv_vbeln )->get_orders( )
+              (
+                 get_invoice_scope_by_partner( _vbeln_va )
+              )
+            ).
+
+            SORT lt_scope.
+            DELETE ADJACENT DUPLICATES FROM lt_scope.
+
+            CASE lines( lt_scope ).
+              WHEN 0.
+                RAISE EXCEPTION TYPE zcx_sd_doc_inv_scope
+                  EXPORTING
+                    textid = zcx_sd_doc_inv_scope=>no_scope_for_delivery_order
+                    vbeln  = iv_vbeln.
+              WHEN 1.
+                rv_scope = lt_scope[ 1 ].
+              WHEN OTHERS.
+                RAISE EXCEPTION TYPE zcx_sd_doc_inv_scope
+                  EXPORTING
+                    textid = zcx_sd_doc_inv_scope=>multiple_scope_for_dlv_order
+                    vbeln  = iv_vbeln.
+            ENDCASE.
+
+          WHEN abap_false. " PERS olmayan durum """""""""""""""""""""""""""""""""""""""""""""""
+
+            rv_scope = lo_delivery_customer->get_invoice_scope( ).
+
+        ENDCASE.
+
+      CATCH zcx_sd_doc_inv_scope INTO DATA(lo_cx_scope).
+        RAISE EXCEPTION lo_cx_scope.
+
+      CATCH cx_root INTO DATA(lo_diaper).
+        RAISE EXCEPTION TYPE zcx_sd_doc_inv_scope
+          EXPORTING
+            previous = lo_diaper
+            vbeln    = iv_vbeln.
+    ENDTRY.
+
+  ENDMETHOD.
+
+
+  METHOD get_invoice_scope_by_partner.
+
+    DATA lv_initial_posnr TYPE vbpa-posnr.
+
+    TRY.
+
+        SELECT SINGLE adrnr
+          FROM vbpa
+          WHERE
+            vbeln EQ @iv_vbeln AND
+            posnr EQ @lv_initial_posnr AND
+            parvw EQ @c_parvw-payer
+          INTO @DATA(lv_adrnr).
+
+        IF sy-subrc NE 0.
+          RAISE EXCEPTION TYPE cx_no_entry_in_table
+            EXPORTING
+              table_name = CONV #( c_tabname-vbpa )
+              entry_name = |{ iv_vbeln } { c_parvw-payer }|.
+        ENDIF.
+
+        rv_scope = get_invoice_scope_by_address(
+          iv_adrnr   = lv_adrnr
+          iv_purpose = iv_purpose
+        ).
+
+      CATCH cx_root INTO DATA(lo_diaper).
+        RAISE EXCEPTION TYPE zcx_sd_doc_inv_scope
+          EXPORTING
+            previous = lo_diaper
+            vbeln    = iv_vbeln.
+
+    ENDTRY.
+
+  ENDMETHOD.
+
+
+  METHOD get_invoice_scope_by_tax.
+
+    DATA:
+      lv_earc  TYPE char1,
+      lv_einv  TYPE char1,
+      lv_paper TYPE char1.
+
+    ASSIGN gt_fatura_kapsami_cache[
+        KEY primary_key COMPONENTS
+        stcd2   = iv_stcd2
+        purpose = iv_purpose
+      ] TO FIELD-SYMBOL(<ls_cache>).
+
+    IF sy-subrc NE 0.
+
+      DATA(ls_cache) = VALUE t_fatura_kapsami_cache(
+        stcd2   = iv_stcd2
+        purpose = iv_purpose
+      ).
+
+      " E-Fatura / kağıt """""""""""""""""""""""""""""""""""""""""""
+
+      DATA(lv_taxno) = CONV /fite/inv_1_de017( ls_cache-stcd2 ).
+
+      CALL FUNCTION '/FITE/INV_1_F021'
+        EXPORTING
+          i_tax_number     = lv_taxno
+          i_inv_date       = sy-datum
+        IMPORTING
+          e_einv_partn_ind = lv_einv
+          e_paper_printout = lv_paper.
+
+      ls_cache-fatura_kapsami = COND #(
+        WHEN lv_einv  EQ abap_true THEN c_fatura_kapsami-e_fatura
+        WHEN lv_paper EQ abap_true THEN c_fatura_kapsami-kagit
+      ).
+
+      " E-Arşiv """"""""""""""""""""""""""""""""""""""""""""""""""""
+
+      IF iv_purpose NE zcl_sd_customer=>c_purpose-mutabakat AND ls_cache-fatura_kapsami NE c_fatura_kapsami-e_fatura.
+
+        DATA(lv_taxnu) = CONV /fite/arc_1_de017( ls_cache-stcd2 ).
+
+        CALL FUNCTION '/FITE/ARC_1_F002'
+          EXPORTING
+            i_tax_number     = lv_taxnu
+            i_inv_date       = sy-datum
+          IMPORTING
+            e_arch_partn_ind = lv_earc.
+
+        ls_cache-fatura_kapsami = COND #(
+          WHEN lv_earc EQ abap_true THEN c_fatura_kapsami-e_arsiv
+          ELSE ls_cache-fatura_kapsami
+        ).
+
+      ENDIF.
+
+      " Bu kadar """"""""""""""""""""""""""""""""""""""""""""""""""""
+
+      INSERT ls_cache
+        INTO TABLE gt_fatura_kapsami_cache
+        ASSIGNING <ls_cache>.
+
+    ENDIF.
+
+    rv_scope = <ls_cache>-fatura_kapsami.
 
   ENDMETHOD.
 
@@ -620,6 +1029,7 @@ CLASS zcl_sd_customer IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD get_transport_zone.
 
     ro_obj = zcl_sd_transport_zone=>get_instance(
@@ -629,10 +1039,43 @@ CLASS zcl_sd_customer IMPLEMENTATION.
 
   ENDMETHOD.
 
+
+  METHOD is_employer.
+    rv_employer = xsdbool( gs_def-ktokd EQ c_ktokd-employer ).
+  ENDMETHOD.
+
+
   METHOD read_parob_lazy.
     CHECK gs_clazy-flg-parob IS INITIAL.
     SELECT * INTO CORRESPONDING FIELDS OF TABLE gs_clazy-val-parob FROM zsdt_cus_parob. "#EC CI_NOWHERE
     gs_clazy-flg-parob = abap_true.
+  ENDMETHOD.
+
+
+  METHOD put_name1_into_itab.
+    FIELD-SYMBOLS <lt_itab> TYPE ANY TABLE.
+
+    ASSERT ir_itab IS NOT INITIAL.
+    ASSIGN ir_itab->* TO <lt_itab>.
+    IF <lt_itab> IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    TRY.
+        cache_name1( ir_tab  = ir_itab
+                     iv_fnam = iv_kunnr_field ).
+      CATCH cx_root ##no_handler .
+    ENDTRY.
+
+    LOOP AT <lt_itab> ASSIGNING FIELD-SYMBOL(<ls_itab>).
+      ASSIGN COMPONENT: iv_kunnr_field OF STRUCTURE <ls_itab> TO FIELD-SYMBOL(<lv_kunnr>),
+                        iv_name1_field OF STRUCTURE <ls_itab> TO FIELD-SYMBOL(<lv_name1>).
+
+      ASSERT <lv_kunnr> IS ASSIGNED AND <lv_name1> IS ASSIGNED.
+
+      <lv_name1> = get_name1( <lv_kunnr> ).
+    ENDLOOP.
+
   ENDMETHOD.
 
 
@@ -647,5 +1090,28 @@ CLASS zcl_sd_customer IMPLEMENTATION.
         RETURN.
     ENDTRY.
 
+  ENDMETHOD.
+
+
+  METHOD get_land.
+    output = zcl_bc_land=>get_instance( VALUE #( land1 = me->gs_def-land1 ) ).
+  ENDMETHOD.
+
+
+  METHOD is_eu_member.
+    output = get_land( )->def-xegld.
+  ENDMETHOD.
+
+
+  METHOD is_multi_cargo.
+    IF gs_lazy-flg-multi_cargo = abap_false.
+      SELECT SINGLE @abap_true FROM zsdt_ckkrg_c01
+             WHERE kunnr = @gs_def-kunnr
+             INTO @gs_lazy-val-multi_cargo.
+
+      gs_lazy-flg-multi_cargo = abap_true.
+    ENDIF.
+
+    result = gs_lazy-val-multi_cargo.
   ENDMETHOD.
 ENDCLASS.

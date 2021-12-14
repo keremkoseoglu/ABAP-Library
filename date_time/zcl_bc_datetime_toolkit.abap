@@ -105,6 +105,10 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
         IMPORTING !perbl        TYPE jahrperbl
         RETURNING VALUE(output) TYPE sydatum,
 
+      get_last_day_of_alv_perio
+        IMPORTING !alv_perio    TYPE wahd_alv_perio
+        RETURNING VALUE(output) TYPE sydatum,
+
       get_minutes_between_times
         IMPORTING
           !iv_from_date     TYPE sydatum
@@ -572,6 +576,12 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
     ENDIF.
 
     output = <cache>-datum.
+  ENDMETHOD.
+
+
+  METHOD get_last_day_of_alv_perio.
+    DATA(perbl) = CONV jahrperbl( |{ alv_perio+0(4) }0{ alv_perio+4(2) }| ).
+    output = get_last_day_of_perbl( perbl ).
   ENDMETHOD.
 
 

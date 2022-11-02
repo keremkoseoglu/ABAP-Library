@@ -1,0 +1,8 @@
+﻿02.11.2022                                                                Dinamik liste çıktısı                                                                                                                        1
+
+
+	Tanım kümesi	Et	Vers	VrTp	Lngth	OutLeng	Dec.Places	Lowercase	Sn	Ln	Defaults	Value table	Conv.Rout.	Template	Tmp.	Ac	Uyg.	ActTyp	Author	Date	Time	L	R	G	Tanım km.	AE	PrUsage	Output	AM/PM	Lng. Vrsn.
+
+	ZBCD_JSP_IMPID	A		CHAR	   10	     10						ZBCT_JSP_IMP							X-KEREMKOS	27.04.2022	10:54:34
+	ZBCD_JSP_JPHID	A		NUMC	   10	     10						ZBCT_JSP_JPHDR							X-KEREMKOS	27.04.2022	10:54:34
+	ZBCD_JSP_MILST	A		CHAR	    5	      5					X								X-KEREMKOS	27.04.2022	10:54:34

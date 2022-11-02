@@ -1,0 +1,21 @@
+﻿02.11.2022                                                                                                       Dinamik liste çıktısı                                                                                                                                                               1
+
+
+	Veri öğesi	Et	Vers	Tanım kümesi	Lngth	Ptn	Chg	Hea	SFL	MFL	LFL	Ac	Uyg.	ActTyp	Author	Date	Time	L	R	G	Arama yrd.	AraYrdPrmt	Comp. name	VrTp	Lngth	Dec.Places	OutLeng	Lowercase	Sn	Conv.Rout.	Defaults	Value table	Cat	Ref.Type  (Coded)	PrUsage	LTR	BIDI	No History	Lng. Vrsn.
+
+	ZBCD_JSP_IMPID	A		ZBCD_JSP_IMPID				 11	 10	 20	 40				X-KEREMKOS	27.04.2022	11:01:31	TR						CHAR	   10		     10					ZBCT_JSP_IMP	D
+	ZBCD_JSP_IMPTX	A		TEXT40				 40	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						CHAR	   40		     40	X					D
+	ZBCD_JSP_JIMAX	A		INT4				 30	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						INT4	   10		     11		X				D
+	ZBCD_JSP_JPHID	A		ZBCD_JSP_JPHID				 12	 10	 20	 40				X-KEREMKOS	27.04.2022	11:01:31	TR						NUMC	   10		     10					ZBCT_JSP_JPHDR	D
+	ZBCD_JSP_JPPOS	A		NUMC6				 16	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						NUMC	    6		      6						D
+	ZBCD_JSP_MFDAT	A		DATS				 12	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						DATS	    8		     10						D
+	ZBCD_JSP_MFINI	A		CHECKBOX				 20	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						CHAR	    1		      1				X		D
+	ZBCD_JSP_MFNAM	A		XUBNAME				 13	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						CHAR	   12		     12					USR02	D
+	ZBCD_JSP_MFZET	A		UZEIT				 11	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						TIMS	    6		      8						D
+	ZBCD_JSP_MILST	A		ZBCD_JSP_MILST				 14	 10	 20	 40				X-KEREMKOS	27.04.2022	11:01:31	TR						CHAR	    5		      5				X		D
+	ZBCD_JSP_MSDAT	A		DATS				 14	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						DATS	    8		     10						D
+	ZBCD_JSP_MSNAM	A		XUBNAME				 14	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						CHAR	   12		     12					USR02	D
+	ZBCD_JSP_MSTAR	A		CHECKBOX				 22	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						CHAR	    1		      1				X		D
+	ZBCD_JSP_MSZET	A		UZEIT				 13	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						TIMS	    6		      8						D
+	ZBCD_JSP_PJMAX	A		INT4				 27	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						INT4	   10		     11		X				D
+	ZBCD_JSP_PROT	A		CHECKBOX				 18	 10	 20	 40				X-KEREMKOS	27.04.2022	10:54:56	TR						CHAR	    1		      1				X		D

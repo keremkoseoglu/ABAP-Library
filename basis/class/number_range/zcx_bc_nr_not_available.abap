@@ -42,7 +42,8 @@ ENDCLASS.
 
 
 
-CLASS zcx_bc_nr_not_available IMPLEMENTATION.
+CLASS ZCX_BC_NR_NOT_AVAILABLE IMPLEMENTATION.
+
 
   METHOD constructor.
     CALL METHOD super->constructor

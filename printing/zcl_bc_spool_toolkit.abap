@@ -4,7 +4,6 @@ CLASS zcl_bc_spool_toolkit DEFINITION
   CREATE PUBLIC .
 
   PUBLIC SECTION.
-
     CLASS-METHODS conv_spool_to_pdf
       IMPORTING
         !iv_spoolid TYPE rspoid
@@ -24,7 +23,9 @@ CLASS zcl_bc_spool_toolkit DEFINITION
       IMPORTING
         !im_formname    TYPE tdsfname
       RETURNING
-        VALUE(rv_fname) TYPE rs38l_fnam .
+        VALUE(rv_fname) TYPE rs38l_fnam
+      RAISING
+        ycx_addict_function_subrc .
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -32,10 +33,8 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_spool_toolkit IMPLEMENTATION.
-
+CLASS ZCL_BC_SPOOL_TOOLKIT IMPLEMENTATION.
   METHOD conv_spool_to_pdf.
-
     CALL FUNCTION 'FPCOMP_CREATE_PDF_FROM_SPOOL'
       EXPORTING
         i_spoolid      = iv_spoolid
@@ -69,32 +68,29 @@ CLASS zcl_bc_spool_toolkit IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD print_option_get_for_pdf.
-
-    es_control_param-getotf     = 'X'.
-    es_control_param-no_dialog  = 'X'.
-    es_control_param-preview    = 'X'.
+    es_control_param-getotf     = abap_true.
+    es_control_param-no_dialog  = abap_true.
+    es_control_param-preview    = abap_true.
     es_control_param-device     = 'PRINTER'.
-
-    es_composer_param-tddest = 'LP01'.
+    es_composer_param-tddest    = 'LP01'.
     es_composer_param-tdnoprev  = ''.
-
-
   ENDMETHOD.
 
+
   METHOD ssf_name.
+    ##FM_SUBRC_OK
     CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
       EXPORTING
         formname           = im_formname
-*       VARIANT            = ' '
-*       DIRECT_CALL        = ' '
       IMPORTING
         fm_name            = rv_fname
       EXCEPTIONS
         no_form            = 1
         no_function_module = 2
-        OTHERS             = 3 ##FM_SUBRC_OK.
+        OTHERS             = 3.
 
+    ycx_addict_function_subrc=>raise_if_sysubrc_not_initial( 'SSF_FUNCTION_MODULE_NAME' ).
   ENDMETHOD.
-
 ENDCLASS.

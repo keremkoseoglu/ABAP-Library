@@ -41,7 +41,7 @@ CLASS zcl_bc_ddic_toolkit DEFINITION
       IMPORTING
         !iv_char      TYPE char20
       RETURNING
-        VALUE(rv_dec) TYPE dmbtr .
+        VALUE(rv_dec) TYPE dmbtr_13_2 .
     CLASS-METHODS char_to_dec3
       IMPORTING
         !iv_char      TYPE char20
@@ -101,7 +101,9 @@ CLASS zcl_bc_ddic_toolkit DEFINITION
       IMPORTING
         !iv_matnr       TYPE clike
       RETURNING
-        VALUE(rv_matnr) TYPE matnr .
+        VALUE(rv_matnr) TYPE matnr
+      RAISING
+        ycx_addict_function_subrc .
     CLASS-METHODS matnr_output
       IMPORTING
         !iv_matnr       TYPE matnr
@@ -122,10 +124,8 @@ CLASS zcl_bc_ddic_toolkit DEFINITION
   PROTECTED SECTION.
   PRIVATE SECTION.
 
-    CONSTANTS:
-      c_clsname_me TYPE seoclsname VALUE 'ZCL_BC_DDIC_TOOLKIT',
-      c_meth_eawff TYPE seocpdname VALUE 'ENSURE_ALL_WA_FIELDS_FULL'.
-
+    CONSTANTS c_clsname_me TYPE seoclsname VALUE 'ZCL_BC_DDIC_TOOLKIT' ##NO_TEXT.
+    CONSTANTS c_meth_eawff TYPE seocpdname VALUE 'ENSURE_ALL_WA_FIELDS_FULL' ##NO_TEXT.
 ENDCLASS.
 
 
@@ -177,6 +177,7 @@ CLASS zcl_bc_ddic_toolkit IMPLEMENTATION.
         ELSE.
           REPLACE '.' WITH ',' INTO lv_char.
         ENDIF.
+
         CALL FUNCTION 'OIU_ME_CHAR_TO_NUMBER'
           EXPORTING
             i_char         = lv_char
@@ -186,18 +187,14 @@ CLASS zcl_bc_ddic_toolkit IMPLEMENTATION.
           EXCEPTIONS
             invalid_number = 1
             OTHERS         = 2.
-        IF sy-subrc <> 0.
-*   Implement suitable error handling here
-        ENDIF.
-      CATCH cx_root ##NO_HANDLER.
 
+      CATCH cx_root ##NO_HANDLER.
     ENDTRY.
 
   ENDMETHOD.
 
 
   METHOD char_to_dec3.
-
     CALL FUNCTION 'OIU_ME_CHAR_TO_NUMBER'
       EXPORTING
         i_char         = iv_char
@@ -207,11 +204,6 @@ CLASS zcl_bc_ddic_toolkit IMPLEMENTATION.
       EXCEPTIONS
         invalid_number = 1
         OTHERS         = 2.
-    IF sy-subrc <> 0.
-* Implement suitable error handling here
-    ENDIF.
-
-
   ENDMETHOD.
 
 
@@ -253,16 +245,11 @@ CLASS zcl_bc_ddic_toolkit IMPLEMENTATION.
     CALL FUNCTION 'CONVERSION_EXIT_CUNIT_INPUT'
       EXPORTING
         input          = iv_meins
-*       LANGUAGE       = SY-LANGU
       IMPORTING
         output         = rv_meins
       EXCEPTIONS
         unit_not_found = 1
         OTHERS         = 2.
-    IF sy-subrc <> 0.
-* Implement suitable error handling here
-    ENDIF.
-
   ENDMETHOD.
 
 
@@ -278,6 +265,7 @@ CLASS zcl_bc_ddic_toolkit IMPLEMENTATION.
       EXCEPTIONS
         unit_not_found = 1
         OTHERS         = 2.
+
     IF sy-subrc <> 0.
       rv_meins = iv_meins.
 * Implement suitable error handling here
@@ -434,7 +422,6 @@ CLASS zcl_bc_ddic_toolkit IMPLEMENTATION.
 
 
   METHOD matnr_input.
-
     CALL FUNCTION 'CONVERSION_EXIT_MATN1_INPUT'
       EXPORTING
         input        = iv_matnr
@@ -442,9 +429,9 @@ CLASS zcl_bc_ddic_toolkit IMPLEMENTATION.
         output       = rv_matnr
       EXCEPTIONS
         length_error = 1
-        OTHERS       = 2
-        ##FM_SUBRC_OK.
+        OTHERS       = 2.
 
+    ycx_addict_function_subrc=>raise_if_sysubrc_not_initial( 'CONVERSION_EXIT_MATN1_INPUT' ).
   ENDMETHOD.
 
 
@@ -468,5 +455,4 @@ CLASS zcl_bc_ddic_toolkit IMPLEMENTATION.
         output = rv_vbeln.
 
   ENDMETHOD.
-
 ENDCLASS.

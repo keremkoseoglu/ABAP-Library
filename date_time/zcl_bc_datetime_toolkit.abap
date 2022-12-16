@@ -5,6 +5,9 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
 
   PUBLIC SECTION.
 
+    TYPES: perbl_range TYPE RANGE OF perbl,
+           perbl_list  TYPE STANDARD TABLE OF perbl WITH KEY table_line.
+
     CONSTANTS: BEGIN OF c_seconds,
                  per_hour   TYPE i VALUE 3600,
                  per_minute TYPE i VALUE 60,
@@ -129,7 +132,7 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
         RETURNING
           VALUE(rv_workday) TYPE abap_bool
         RAISING
-          zcx_bc_function_subrc,
+          zcx_bc_date,
 
       last_day
         IMPORTING !iv_day       TYPE datum
@@ -166,6 +169,10 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
         RETURNING
           VALUE(rv_jahrper) TYPE jahrper.
 
+    CLASS-METHODS explode_perbl_range
+      IMPORTING !perbl_rng    TYPE perbl_range
+      RETURNING VALUE(result) TYPE perbl_list.
+
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -180,7 +187,7 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
            BEGIN OF t_fwd_cache,
              datum   TYPE sydatum,
              calid   TYPE scal-fcalid,
-             cx      TYPE REF TO zcx_bc_function_subrc,
+             cx      TYPE REF TO zcx_bc_date,
              workday TYPE abap_bool,
            END OF t_fwd_cache,
 
@@ -201,6 +208,10 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
     CONSTANTS: BEGIN OF c_clsname,
                  me TYPE seoclsname VALUE 'ZCL_BC_DATETIME_TOOLKIT',
                END OF c_clsname.
+
+    CONSTANTS: BEGIN OF c_perbl,
+                 december TYPE perbl VALUE '012',
+               END OF c_perbl.
 
     CLASS-DATA: gt_fwd_cache        TYPE tt_fwd_cache,
                 gt_drodp_multiton   TYPE tt_drodp_multiton,
@@ -230,6 +241,7 @@ ENDCLASS.
 
 
 CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
+
 
   METHOD add_minutes_to_date_time.
     DATA(lv_itime) = CONV p2012-anzhl( iv_minutes / 60 ) ##NUMBER_OK.
@@ -370,14 +382,13 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
     DATA(first_day) = CONV dats( |{ gjahr_low }{ monat_low }01| ).
 
     DATA(last_day) = get_last_day_of_period(
-          iv_perio = 'M'
-          iv_datum = CONV #( |{ gjahr_high }{ monat_high }01| ) ).
+                         iv_perio = 'M'
+                         iv_datum = CONV #( |{ gjahr_high }{ monat_high }01| ) ).
 
-    output = VALUE #( (
-        sign   = zcl_bc_ddic_toolkit=>c_sign_i
-        option = zcl_bc_ddic_toolkit=>c_option_bt
-        low    = first_day
-        high   = last_day ) ).
+    output = VALUE #( ( sign   = zcl_bc_ddic_toolkit=>c_sign_i
+                        option = zcl_bc_ddic_toolkit=>c_option_bt
+                        low    = first_day
+                        high   = last_day ) ).
   ENDMETHOD.
 
 
@@ -677,7 +688,9 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
           ENDCASE.
 
         CATCH zcx_bc_function_subrc INTO DATA(lo_fun).
-          ls_fwd-cx = lo_fun.
+          ls_fwd-cx = NEW #( textid   = zcx_bc_date=>cant_determine_if_workday
+                             previous = lo_fun
+                             datum    = iv_datum ).
       ENDTRY.
 
       INSERT ls_fwd INTO TABLE gt_fwd_cache ASSIGNING <ls_fwd>.
@@ -933,4 +946,16 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
     rv_jahrper = |{ lv_year }0{ lv_month }|.
   ENDMETHOD.
 
+
+  METHOD explode_perbl_range.
+    DATA(perbl) = CONV perbl( '001' ).
+
+    WHILE perbl <= c_perbl-december.
+      IF perbl IN perbl_rng.
+        APPEND perbl TO result.
+      ENDIF.
+
+      perbl = perbl + 1.
+    ENDWHILE.
+  ENDMETHOD.
 ENDCLASS.

@@ -11,7 +11,6 @@ CLASS zcl_bc_html_builder DEFINITION
     METHODS reset_html.
 
     METHODS open_html
-      IMPORTING !title TYPE clike OPTIONAL
       RAISING   zcx_bc_html.
 
     METHODS close_html RAISING zcx_bc_html.
@@ -77,9 +76,7 @@ CLASS zcl_bc_html_builder IMPLEMENTATION.
 
 
   METHOD open_html.
-    append_html( |<html><head><title>| ).
-    append_text( title ).
-    append_html( |</title></head><body>| ).
+    append_html( |<html><body>| ).
   ENDMETHOD.
 
 

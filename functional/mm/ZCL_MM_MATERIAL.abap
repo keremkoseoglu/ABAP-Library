@@ -109,7 +109,7 @@ CLASS zcl_mm_material DEFINITION
                   iv_cache_mard TYPE abap_bool                   DEFAULT abap_true
                   io_log        TYPE REF TO zcl_bc_applog_facade OPTIONAL
         RAISING   zcx_bc_class_method
-                  zcx_mm_material_stg_loc_def,
+                  RESUMABLE(zcx_mm_material_stg_loc_def),
 
       fill_itab_with_maktx
         IMPORTING ir_itab       TYPE REF TO data
@@ -155,13 +155,7 @@ CLASS zcl_mm_material DEFINITION
       get_instance
         IMPORTING iv_matnr      TYPE matnr
         RETURNING VALUE(ro_obj) TYPE REF TO zcl_mm_material
-        RAISING   zcx_mm_material,
-
-      get_tax_rate
-        IMPORTING iv_matnr TYPE matnr
-                  iv_aland TYPE aland DEFAULT c_aland_def
-        EXPORTING ev_kdv   TYPE clike
-                  ev_otv   TYPE clike.
+        RAISING   zcx_mm_material.
 
     CLASS-METHODS conversion_exit_input
       IMPORTING matnr         TYPE clike
@@ -221,6 +215,24 @@ CLASS zcl_mm_material DEFINITION
         IMPORTING iv_werks          TYPE werks_d
         RETURNING VALUE(rv_defined) TYPE abap_bool.
 
+    METHODS convert_quantity
+      IMPORTING from_uom      TYPE mara-meins
+                to_uom        TYPE mara-meins
+                !quantity     TYPE mengv13
+      RETURNING VALUE(result) TYPE mengv13
+      RAISING   zcx_mm_material_unit_conv.
+
+    METHODS convert_quantity_to_base_uom
+      IMPORTING from_uom      TYPE mara-meins
+                !quantity     TYPE mengv13
+      RETURNING VALUE(result) TYPE mengv13
+      RAISING   zcx_mm_material_unit_conv.
+
+    METHODS get_tax_rate
+      IMPORTING iv_aland TYPE aland DEFAULT c_aland_def
+      EXPORTING ev_kdv   TYPE clike
+                ev_otv   TYPE clike.
+
   PRIVATE SECTION.
     TYPES:
       BEGIN OF t_marc_subrc,
@@ -228,8 +240,7 @@ CLASS zcl_mm_material DEFINITION
         werks TYPE marc-werks,
         subrc TYPE sysubrc,
       END OF t_marc_subrc.
-    TYPES tt_marc_subrc
-              TYPE HASHED TABLE OF t_marc_subrc
+    TYPES tt_marc_subrc TYPE HASHED TABLE OF t_marc_subrc
               WITH UNIQUE KEY primary_key COMPONENTS matnr werks.
     TYPES:
       BEGIN OF t_mard,
@@ -237,19 +248,16 @@ CLASS zcl_mm_material DEFINITION
         werks TYPE mard-werks,
         lgort TYPE mard-lgort,
       END OF t_mard.
-    TYPES tt_mard
-              TYPE HASHED TABLE OF t_mard
+    TYPES tt_mard TYPE HASHED TABLE OF t_mard
               WITH UNIQUE KEY primary_key COMPONENTS matnr werks lgort.
     TYPES:
       BEGIN OF t_marm_cache,
         matnr TYPE marm-matnr,
         marm  TYPE tt_marm,
       END OF t_marm_cache.
-    TYPES tt_marm_cache
-              TYPE HASHED TABLE OF t_marm_cache
+    TYPES tt_marm_cache TYPE HASHED TABLE OF t_marm_cache
               WITH UNIQUE KEY primary_key COMPONENTS matnr.
-    TYPES tt_mlan_cache
-              TYPE HASHED TABLE OF mlan
+    TYPES tt_mlan_cache TYPE HASHED TABLE OF mlan
               WITH UNIQUE KEY primary_key COMPONENTS matnr aland.
     TYPES:
       BEGIN OF t_multiton,
@@ -264,8 +272,7 @@ CLASS zcl_mm_material DEFINITION
         vtweg TYPE vtweg,
         tvms  TYPE tvms,
       END OF t_block_cache.
-    TYPES tt_block_cache
-              TYPE HASHED TABLE OF t_block_cache
+    TYPES tt_block_cache TYPE HASHED TABLE OF t_block_cache
               WITH UNIQUE KEY primary_key COMPONENTS vkorg vtweg.
     TYPES:
       BEGIN OF t_batch_existence_cache,
@@ -276,6 +283,15 @@ CLASS zcl_mm_material DEFINITION
     TYPES tt_warehouse             TYPE HASHED TABLE OF t_warehouse WITH UNIQUE KEY primary_key COMPONENTS lgnum.
     TYPES tt_valuation_via_plant   TYPE HASHED TABLE OF t_valuation_via_plant
                                    WITH UNIQUE KEY primary_key COMPONENTS werks.
+
+    TYPES: BEGIN OF t_tax_rate_cache,
+             aland TYPE mlan-aland,
+             kdv   TYPE char2,
+             otv   TYPE char2,
+           END OF t_tax_rate_cache,
+
+           tt_tax_rate_cache TYPE HASHED TABLE OF t_tax_rate_cache
+                             WITH UNIQUE KEY primary_key COMPONENTS aland.
 
     CONSTANTS:
       BEGIN OF c_tabname,
@@ -299,24 +315,22 @@ CLASS zcl_mm_material DEFINITION
     DATA gt_valuation_via_plant   TYPE tt_valuation_via_plant.
     DATA gt_warehouse             TYPE tt_warehouse.
     DATA gv_warehouse_read        TYPE abap_bool.
+    DATA gt_tax_rates             TYPE tt_tax_rate_cache.
 
-    CLASS-DATA gt_makt
-                   TYPE HASHED TABLE OF makt
+    CLASS-DATA gt_makt       TYPE HASHED TABLE OF makt
                    WITH UNIQUE KEY primary_key COMPONENTS spras matnr.
-    CLASS-DATA gt_mara
-                   TYPE HASHED TABLE OF mara
+    CLASS-DATA gt_mara       TYPE HASHED TABLE OF mara
                    WITH UNIQUE KEY primary_key COMPONENTS matnr.
-    CLASS-DATA gt_marc
-                   TYPE HASHED TABLE OF marc
+    CLASS-DATA gt_marc       TYPE HASHED TABLE OF marc
                    WITH UNIQUE KEY primary_key COMPONENTS matnr werks.
     CLASS-DATA gt_mbew       TYPE HASHED TABLE OF mbew
                          WITH UNIQUE KEY primary_key COMPONENTS matnr bwkey.
     CLASS-DATA gt_marc_subrc TYPE tt_marc_subrc.
-    CLASS-DATA gt_mard TYPE tt_mard.
-    CLASS-DATA gt_marm TYPE tt_marm_cache.
-    CLASS-DATA gt_mlan TYPE tt_mlan_cache.
-    CLASS-DATA gt_mvke TYPE tt_mvke.
-    CLASS-DATA gt_multiton TYPE tt_multiton.
+    CLASS-DATA gt_mard       TYPE tt_mard.
+    CLASS-DATA gt_marm       TYPE tt_marm_cache.
+    CLASS-DATA gt_mlan       TYPE tt_mlan_cache.
+    CLASS-DATA gt_mvke       TYPE tt_mvke.
+    CLASS-DATA gt_multiton   TYPE tt_multiton.
 
     METHODS get_block_status
       IMPORTING iv_vkorg         TYPE vkorg
@@ -915,10 +929,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
     CHECK ir_tab IS NOT INITIAL.
 
-    ASSERT
-      iv_fnam_matnr IS NOT INITIAL AND
-      iv_fnam_werks IS NOT INITIAL AND
-      iv_fnam_lgort IS NOT INITIAL.
+    ASSERT iv_fnam_matnr IS NOT INITIAL AND
+           iv_fnam_werks IS NOT INITIAL AND
+           iv_fnam_lgort IS NOT INITIAL.
 
     ASSIGN ir_tab->* TO <lt_tab>.
     IF <lt_tab> IS INITIAL.
@@ -934,26 +947,22 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
     LOOP AT <lt_tab> ASSIGNING FIELD-SYMBOL(<ls_tab>).
 
-      ASSIGN COMPONENT:
-        iv_fnam_matnr OF STRUCTURE <ls_tab> TO FIELD-SYMBOL(<lv_matnr>),
-        iv_fnam_werks OF STRUCTURE <ls_tab> TO FIELD-SYMBOL(<lv_werks>),
-        iv_fnam_lgort OF STRUCTURE <ls_tab> TO FIELD-SYMBOL(<lv_lgort>).
+      ASSIGN COMPONENT: iv_fnam_matnr OF STRUCTURE <ls_tab> TO FIELD-SYMBOL(<lv_matnr>),
+                        iv_fnam_werks OF STRUCTURE <ls_tab> TO FIELD-SYMBOL(<lv_werks>),
+                        iv_fnam_lgort OF STRUCTURE <ls_tab> TO FIELD-SYMBOL(<lv_lgort>).
 
-      ASSERT
-        <lv_matnr> IS ASSIGNED AND
-        <lv_werks> IS ASSIGNED AND
-        <lv_lgort> IS ASSIGNED.
+      ASSERT <lv_matnr> IS ASSIGNED AND
+             <lv_werks> IS ASSIGNED AND
+             <lv_lgort> IS ASSIGNED.
 
-      CHECK
-                <lv_matnr> IS NOT INITIAL
+      CHECK     <lv_matnr> IS NOT INITIAL
             AND <lv_werks> IS NOT INITIAL
             AND <lv_lgort> IS NOT INITIAL.
 
-      CHECK NOT line_exists( gt_mard[
-                                               KEY primary_key
-                                               COMPONENTS matnr = <lv_matnr>
-                                                          werks = <lv_werks>
-                                                          lgort = <lv_lgort> ] ).
+      CHECK NOT line_exists( gt_mard[ KEY primary_key
+                                      COMPONENTS matnr = <lv_matnr>
+                                                 werks = <lv_werks>
+                                                 lgort = <lv_lgort> ] ).
 
       DATA(lo_cx) = NEW zcx_mm_material_stg_loc_def( matnr    = <lv_matnr>
                                                      werks    = <lv_werks>
@@ -968,7 +977,6 @@ CLASS zcl_mm_material IMPLEMENTATION.
       ENDIF.
 
       RAISE RESUMABLE EXCEPTION lo_cx.
-
     ENDLOOP.
   ENDMETHOD.
 
@@ -1286,17 +1294,36 @@ CLASS zcl_mm_material IMPLEMENTATION.
     CLEAR: ev_kdv,
            ev_otv.
 
-    DATA(ls_mlan) = zcl_mm_material=>get_mlan( iv_matnr = iv_matnr
-                                               iv_aland = iv_aland ).
+    TRY.
+        DATA(lr_tax_rate) = REF #( gt_tax_rates[ KEY primary_key COMPONENTS aland = iv_aland ] ).
 
-    ev_kdv = SWITCH #( ls_mlan-taxm1
-                       WHEN 1 THEN '1'
-                       WHEN 2 THEN '8'
-                       WHEN 3 THEN '18' ).
+      CATCH cx_sy_itab_line_not_found.
+        DATA(ls_new_tax_rate) = VALUE t_tax_rate_cache( aland = iv_aland ).
 
-    ev_otv = SWITCH #( ls_mlan-taxm2
-                       WHEN 0 THEN '0'
-                       WHEN 1 THEN '20' ).
+        DATA(ls_mlan) = get_mlan( iv_matnr = gs_def-matnr
+                                  iv_aland = iv_aland ).
+
+        TRY.
+            ls_new_tax_rate-kdv = zcl_sd_tax_class=>get_instance( ls_mlan-taxm1 )->get_tax_rate_text( ).
+          CATCH cx_root.
+            ls_new_tax_rate-kdv = '0'.
+        ENDTRY.
+
+        SELECT SINGLE FROM zi_sd_tr_sct_rate
+               FIELDS vat_rate_txt
+               WHERE  taxm2 = @ls_mlan-taxm2 AND
+                      land1 = @iv_aland
+               INTO   @ls_new_tax_rate-otv.
+
+        IF ls_new_tax_rate-otv = space.
+          ls_new_tax_rate-otv = '0'.
+        ENDIF.
+
+        INSERT ls_new_tax_rate INTO TABLE gt_tax_rates REFERENCE INTO lr_tax_rate.
+    ENDTRY.
+
+    ev_kdv = lr_tax_rate->kdv.
+    ev_otv = lr_tax_rate->otv.
   ENDMETHOD.
 
   METHOD get_valuation_data_via_plant.
@@ -1338,7 +1365,7 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
     TRY.
         rs_warehouse = CORRESPONDING #( gt_warehouse[ KEY primary_key COMPONENTS lgnum = iv_lgnum ] ).
-      CATCH cx_sy_itab_line_not_found INTO DATA(lo_cx_itab).
+      CATCH cx_sy_itab_line_not_found INTO DATA(lo_cx_itab). " TODO: variable is assigned but never used (ABAP cleaner)
         RAISE EXCEPTION NEW cx_no_entry_in_table( table_name = CONV #( c_tabname-warehouse )
                                                   entry_name = |{ gs_def-matnr } { iv_lgnum }| ).
     ENDTRY.
@@ -1446,6 +1473,51 @@ CLASS zcl_mm_material IMPLEMENTATION.
                                 ]-subrc = 0                                         THEN abap_true
 
               ELSE                                                                       abap_false ).
+  ENDMETHOD.
+
+  METHOD convert_quantity.
+    TRY.
+        CHECK quantity IS NOT INITIAL. " 0 ise, 0 dönsün
+
+        IF from_uom = to_uom.
+          result = quantity.
+          RETURN.
+        ENDIF.
+
+        DATA(i_menge) = CONV ekpo-menge( abs( quantity ) ).
+        DATA(e_menge) = CONV ekpo-menge( 0 ).
+
+        ##FM_SUBRC_OK
+        CALL FUNCTION 'MD_CONVERT_MATERIAL_UNIT'
+          EXPORTING  i_matnr              = gs_def-matnr
+                     i_in_me              = from_uom
+                     i_out_me             = to_uom
+                     i_menge              = i_menge
+          IMPORTING  e_menge              = e_menge
+          EXCEPTIONS error_in_application = 1
+                     error                = 2
+                     OTHERS               = 3.
+
+        ycx_addict_function_subrc=>raise_if_sysubrc_not_initial( 'MD_CONVERT_MATERIAL_UNIT' ).
+
+        IF quantity < 0.
+          e_menge *= -1.
+        ENDIF.
+
+        result = e_menge.
+
+      CATCH cx_root INTO DATA(conv_error).
+        RAISE EXCEPTION NEW zcx_mm_material_unit_conv( previous = conv_error
+                                                       matnr    = gs_def-matnr
+                                                       src_uom  = from_uom
+                                                       tar_uom  = to_uom ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD convert_quantity_to_base_uom.
+    result = convert_quantity( from_uom = from_uom
+                               to_uom   = gs_def-meins
+                               quantity = quantity ).
   ENDMETHOD.
 
   METHOD read_warehouse_lazy.

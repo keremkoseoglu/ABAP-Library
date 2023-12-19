@@ -1,10 +1,9 @@
 CLASS zcl_sd_sales_order DEFINITION
   PUBLIC
   FINAL
-  CREATE PRIVATE .
+  CREATE PRIVATE.
 
   PUBLIC SECTION.
-
     TYPES:
       BEGIN OF t_vbak,
         vkorg TYPE vbak-vkorg,
@@ -12,19 +11,16 @@ CLASS zcl_sd_sales_order DEFINITION
         spart TYPE vbak-spart,
         kunnr TYPE vbak-kunnr,
         faksk TYPE vbak-faksk,
-        waerk type vbak-waerk,
-      END OF t_vbak .
+        waerk TYPE vbak-waerk,
+      END OF t_vbak.
     TYPES:
       BEGIN OF t_ord_dlv_map,
         vbeln_va TYPE vbeln_va,
         posnr_va TYPE posnr_va,
         vbeln_vl TYPE vbeln_vl,
         posnr_vl TYPE posnr_vl,
-      END OF t_ord_dlv_map .
-    TYPES:
-      tt_ord_dlv_map
-          TYPE STANDARD TABLE OF t_ord_dlv_map
-          WITH DEFAULT KEY .
+      END OF t_ord_dlv_map.
+    TYPES tt_ord_dlv_map TYPE STANDARD TABLE OF t_ord_dlv_map WITH DEFAULT KEY.
     TYPES:
       BEGIN OF t_ord_inv_map,
         vbeln_va TYPE vbeln_va,
@@ -35,11 +31,8 @@ CLASS zcl_sd_sales_order DEFINITION
         posnr_vf TYPE posnr_vf,
         fkart    TYPE fkart,
         kunrg    TYPE vbrk-kunrg,
-      END OF t_ord_inv_map .
-    TYPES:
-      tt_ord_inv_map
-          TYPE STANDARD TABLE OF t_ord_inv_map
-          WITH DEFAULT KEY .
+      END OF t_ord_inv_map.
+    TYPES tt_ord_inv_map TYPE STANDARD TABLE OF t_ord_inv_map WITH DEFAULT KEY.
     TYPES:
       BEGIN OF t_partner,
         kunnr TYPE vbpa-kunnr,
@@ -49,143 +42,128 @@ CLASS zcl_sd_sales_order DEFINITION
         name2 TYPE adrc-name2,
         name3 TYPE adrc-name3,
         name4 TYPE adrc-name4,
-      END OF t_partner .
+      END OF t_partner.
     TYPES:
       BEGIN OF t_item_partner,
         posnr TYPE vbpa-posnr,
         parvw TYPE vbpa-parvw,
         kunnr TYPE vbpa-kunnr,
-      END OF t_item_partner .
+      END OF t_item_partner.
     TYPES:
       BEGIN OF t_vbkd,
         ihrez_e TYPE vbkd-ihrez_e,
-      END OF t_vbkd .
+      END OF t_vbkd.
 
-    DATA gv_vbeln TYPE vbeln_va READ-ONLY .
-    CONSTANTS:
-      BEGIN OF c_ktgrm,
-        end_product     TYPE ktgrm VALUE '01', " Mamul
-        commercial_good TYPE ktgrm VALUE '03', " Ticari mal
-      END OF c_ktgrm .
-    CONSTANTS:
-      BEGIN OF c_material_procedure,
-        sanal  TYPE char1 VALUE 'S',
-        ticari TYPE char1 VALUE 'T',
-      END OF c_material_procedure .
-    CONSTANTS:
-      BEGIN OF c_parvw,
-        payer   TYPE parvw VALUE 'RG',
-        sold_to TYPE parvw VALUE 'AG',
-      END OF c_parvw .
+    DATA gv_vbeln TYPE vbeln_va READ-ONLY.
+
+    CONSTANTS: BEGIN OF c_ktgrm,
+                 end_product     TYPE ktgrm VALUE '01', " Mamul
+                 commercial_good TYPE ktgrm VALUE '03', " Ticari mal
+               END OF c_ktgrm.
+
+    CONSTANTS: BEGIN OF c_material_procedure,
+                 sanal  TYPE char1 VALUE 'S',
+                 ticari TYPE char1 VALUE 'T',
+               END OF c_material_procedure.
+
+    CONSTANTS: BEGIN OF c_parvw,
+                 payer   TYPE parvw VALUE 'RG',
+                 sold_to TYPE parvw VALUE 'AG',
+               END OF c_parvw.
 
     CLASS-METHODS get_instance
-      IMPORTING
-        !iv_vbeln         TYPE vbeln_va
-        !iv_wait          TYPE i OPTIONAL
-        !iv_bypass_buffer TYPE abap_bool DEFAULT abap_false
-      RETURNING
-        VALUE(ro_obj)     TYPE REF TO zcl_sd_sales_order
-      RAISING
-        ZCX_SD_ORDER .
+      IMPORTING iv_vbeln         TYPE vbeln_va
+                iv_wait          TYPE i         OPTIONAL
+                iv_bypass_buffer TYPE abap_bool DEFAULT abap_false
+      RETURNING VALUE(ro_obj)    TYPE REF TO zcl_sd_sales_order
+      RAISING   zcx_sd_order.
 
     CLASS-METHODS get_material_procedure
-      IMPORTING
-        !iv_matnr           TYPE vbap-matnr
-        !iv_upmat           TYPE vbap-upmat
-        !iv_vkorg           TYPE vbak-vkorg
-        !iv_vtweg           TYPE vbak-vtweg
-      RETURNING
-        VALUE(rv_procedure) TYPE char1
-      RAISING
-        zcx_sd_zm_material .
-    CLASS-METHODS wait_until_order_created
-      IMPORTING
-        !iv_vbeln TYPE vbeln_va
-      RAISING
-        zcx_sd_order .
-    CLASS-METHODS wait_until_order_item_created
-      IMPORTING
-        !iv_vbeln TYPE vbeln_va
-        !iv_posnr TYPE posnr_va
-      RAISING
-        zcx_sd_order .
+      IMPORTING iv_matnr            TYPE vbap-matnr
+                iv_upmat            TYPE vbap-upmat
+                iv_vkorg            TYPE vbak-vkorg
+                iv_vtweg            TYPE vbak-vtweg
+      RETURNING VALUE(rv_procedure) TYPE char1
+      RAISING   zcx_sd_zm_material.
 
-    class-methods wait_until_order_lockable
-      importing !iv_Vbeln type vbeln_Va
-      raising   zcx_bc_lock.
+    CLASS-METHODS wait_until_order_created
+      IMPORTING iv_vbeln TYPE vbeln_va
+      RAISING   zcx_sd_order.
+
+    CLASS-METHODS wait_until_order_item_created
+      IMPORTING iv_vbeln TYPE vbeln_va
+                iv_posnr TYPE posnr_va
+      RAISING   zcx_sd_order.
+
+    CLASS-METHODS wait_until_order_lockable
+      IMPORTING iv_vbeln TYPE vbeln_va
+      RAISING   zcx_bc_lock.
+
+    CLASS-METHODS exists_in_curr_month_for_mat
+      IMPORTING matnr         TYPE matnr
+      RETURNING VALUE(result) TYPE abap_bool.
+
+    CLASS-METHODS get_mats_in_curr_month
+      IMPORTING matnrs        TYPE table_matnr
+      RETURNING VALUE(result) TYPE table_matnr.
 
     METHODS are_all_items_rejected
-      RETURNING
-        VALUE(rv_all_rejected) TYPE abap_bool .
+      RETURNING VALUE(rv_all_rejected) TYPE abap_bool.
 
     METHODS ensure_item_exists
-      IMPORTING
-        !iv_posnr_va TYPE vbap-posnr
-      RAISING
-        cx_no_entry_in_table .
+      IMPORTING iv_posnr_va TYPE vbap-posnr
+      RAISING   cx_no_entry_in_table.
 
     METHODS ensure_material_exists
-      IMPORTING !iv_matnr TYPE vbap-matnr
-      RAISING
-        zcx_sd_order.
+      IMPORTING iv_matnr TYPE vbap-matnr
+      RAISING   zcx_sd_order.
 
     METHODS get_deliveries
-      RETURNING
-        VALUE(rt_map) TYPE tt_ord_dlv_map .
+      RETURNING VALUE(rt_map) TYPE tt_ord_dlv_map.
+
     METHODS get_header
-      RETURNING
-        VALUE(rs_vbak) TYPE t_vbak .
+      RETURNING VALUE(rs_vbak) TYPE t_vbak.
+
     METHODS get_invoices
-      RETURNING
-        VALUE(rt_map) TYPE tt_ord_inv_map .
+      RETURNING VALUE(rt_map) TYPE tt_ord_inv_map.
+
     METHODS get_partner
-      IMPORTING
-        !iv_parvw         TYPE parvw
-      RETURNING
-        VALUE(rs_partner) TYPE t_partner
-      RAISING
-        zcx_bc_table_content .
+      IMPORTING iv_parvw          TYPE parvw
+      RETURNING VALUE(rs_partner) TYPE t_partner
+      RAISING   zcx_bc_table_content.
+
     METHODS get_item_partner
-      IMPORTING
-        !iv_parvw         TYPE parvw
-        !iv_posnr         TYPE vbpa-posnr
-      RETURNING
-        VALUE(rs_partner) TYPE t_item_partner
-      RAISING
-        zcx_bc_table_content .
+      IMPORTING iv_parvw          TYPE parvw
+                iv_posnr          TYPE vbpa-posnr
+      RETURNING VALUE(rs_partner) TYPE t_item_partner
+      RAISING   zcx_bc_table_content.
+
     METHODS get_sole_item_number
-      RETURNING
-        VALUE(rv_posnr) TYPE posnr_va
-      RAISING
-        zcx_bc_table_content .
+      RETURNING VALUE(rv_posnr) TYPE posnr_va
+      RAISING   zcx_bc_table_content.
+
     METHODS has_product
-      RETURNING
-        VALUE(rv_has) TYPE abap_bool .
+      RETURNING VALUE(rv_has) TYPE abap_bool.
+
     METHODS is_invoiced
-      RETURNING
-        VALUE(rv_invoiced) TYPE abap_bool .
+      RETURNING VALUE(rv_invoiced) TYPE abap_bool.
+
     METHODS is_scope_fat_ayristi
-      RETURNING
-        VALUE(rv_tek) TYPE abap_bool .
+      RETURNING VALUE(rv_tek) TYPE abap_bool.
+
     METHODS validate_carrier
-      IMPORTING
-        !carrier TYPE zsdd_kargoid
-      RAISING
-        zcx_sd_order .
+      IMPORTING carrier TYPE zsdd_kargoid
+      RAISING   zcx_sd_order.
+
     METHODS get_header_business_data
-      RETURNING
-        VALUE(result) TYPE t_vbkd .
+      RETURNING VALUE(result) TYPE t_vbkd.
 
-
-
-  PROTECTED SECTION.
   PRIVATE SECTION.
-
     TYPES:
       BEGIN OF t_multiton,
         vbeln TYPE vbeln_va,
         obj   TYPE REF TO zcl_sd_sales_order,
-        cx    TYPE REF TO ZCX_SD_ORDER,
+        cx    TYPE REF TO zcx_sd_order,
       END OF t_multiton,
 
       tt_multiton
@@ -254,23 +232,29 @@ CLASS zcl_sd_sales_order DEFINITION
       tt_material_procedure_cache TYPE HASHED TABLE OF t_material_procedure_cache
                                   WITH UNIQUE KEY primary_key COMPONENTS matnr vkorg vtweg.
 
-    CONSTANTS:
-      BEGIN OF c_mtpos,
-        set TYPE mtpos VALUE 'ZLUM',
-      END OF c_mtpos,
+    TYPES: BEGIN OF t_matnr_bool,
+             matnr     TYPE matnr,
+             existence TYPE abap_bool,
+           END OF t_matnr_bool,
 
-      BEGIN OF c_tabname,
-        head    TYPE tabname VALUE 'VBAK',
-        item    TYPE tabname VALUE 'VBAP',
-        partner TYPE tabname VALUE 'VBPA',
-      END OF c_tabname,
+           tt_matnr_bool TYPE HASHED TABLE OF t_matnr_bool WITH UNIQUE KEY primary_key COMPONENTS matnr.
 
-      BEGIN OF c_vbtyp,
-        dlv TYPE vbtypl VALUE 'J',
-        inv TYPE vbtypl VALUE 'M',
-      END OF c_vbtyp,
+    CONSTANTS: BEGIN OF c_mtpos,
+                 set TYPE mtpos VALUE 'ZLUM',
+               END OF c_mtpos,
 
-      c_max_wait TYPE i VALUE 60.
+               BEGIN OF c_tabname,
+                 head    TYPE tabname VALUE 'VBAK',
+                 item    TYPE tabname VALUE 'VBAP',
+                 partner TYPE tabname VALUE 'VBPA',
+               END OF c_tabname,
+
+               BEGIN OF c_vbtyp,
+                 dlv TYPE vbtypl VALUE 'J',
+                 inv TYPE vbtypl VALUE 'M',
+               END OF c_vbtyp,
+
+               c_max_wait TYPE i VALUE 60.
 
     CONSTANTS : BEGIN OF carrier_rule,
                   serbest TYPE zsdd_krgrule VALUE 'SERBEST',
@@ -278,7 +262,8 @@ CLASS zcl_sd_sales_order DEFINITION
                 END OF carrier_rule.
 
     CLASS-DATA: gt_material_procedure_cache TYPE tt_material_procedure_cache,
-                gt_multiton                 TYPE tt_multiton.
+                gt_multiton                 TYPE tt_multiton,
+                gt_cur_mon_mat_exist_cache  TYPE tt_matnr_bool.
 
     DATA gs_lazy TYPE t_lazy.
 
@@ -290,34 +275,27 @@ CLASS zcl_sd_sales_order DEFINITION
 ENDCLASS.
 
 
-
 CLASS zcl_sd_sales_order IMPLEMENTATION.
-
-
   METHOD are_all_items_rejected.
     read_vbap_lazy( ).
 
     LOOP AT gs_lazy-val-vbap TRANSPORTING NO FIELDS
-                             WHERE uepos IS INITIAL AND
-                                   abgru IS INITIAL.
+         WHERE     uepos IS INITIAL
+               AND abgru IS INITIAL.
       RETURN.
     ENDLOOP.
 
     rv_all_rejected = abap_true.
   ENDMETHOD.
 
-
   METHOD ensure_item_exists.
     read_vbap_lazy( ).
 
     IF NOT line_exists( gs_lazy-val-vbap[ posnr = iv_posnr_va ] ).
-      RAISE EXCEPTION TYPE cx_no_entry_in_table
-        EXPORTING
-          table_name = CONV #( c_tabname-item )
-          entry_name = CONV #( iv_posnr_va ).
+      RAISE EXCEPTION NEW cx_no_entry_in_table( table_name = CONV #( c_tabname-item )
+                                                entry_name = CONV #( iv_posnr_va ) ).
     ENDIF.
   ENDMETHOD.
-
 
   METHOD ensure_material_exists.
     read_vbap_lazy( ).
@@ -328,7 +306,6 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
                                         matnr  = iv_matnr ).
     ENDIF.
   ENDMETHOD.
-
 
   METHOD get_deliveries.
     IF gs_lazy-flg-dlv IS INITIAL.
@@ -349,12 +326,10 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     rt_map = gs_lazy-val-dlv.
   ENDMETHOD.
 
-
   METHOD get_header.
     read_vbak_lazy( ).
     rs_vbak = gs_lazy-val-vbak.
   ENDMETHOD.
-
 
   METHOD get_instance.
     IF iv_bypass_buffer = abap_true.
@@ -362,7 +337,7 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     ENDIF.
 
     ASSIGN gt_multiton[ KEY         primary_key
-                        COMPONENTS  vbeln = iv_vbeln ]
+                        COMPONENTS vbeln = iv_vbeln ]
            TO FIELD-SYMBOL(<ls_multiton>).
 
     IF sy-subrc <> 0.
@@ -379,11 +354,11 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
         IF sy-subrc = 0.
           EXIT.
         ELSE.
-          ADD 1 TO lv_waited_sec.
+          lv_waited_sec += 1.
 
           IF lv_waited_sec > iv_wait.
-            ls_multiton-cx = NEW #( textid  = zcx_sd_order=>ORDER_DOESNT_EXIST
-                                    vbeln   = ls_multiton-vbeln ).
+            ls_multiton-cx = NEW #( textid = zcx_sd_order=>order_doesnt_exist
+                                    vbeln  = ls_multiton-vbeln ).
             EXIT.
           ENDIF.
 
@@ -401,7 +376,6 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
 
     ro_obj = <ls_multiton>-obj.
   ENDMETHOD.
-
 
   METHOD get_invoices.
     IF gs_lazy-flg-inv IS INITIAL.
@@ -430,21 +404,20 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
         LOOP AT lt_dlv ASSIGNING FIELD-SYMBOL(<ls_dlv>).
 
           LOOP AT lt_vbfa
-            ASSIGNING FIELD-SYMBOL(<ls_vbfa>)
-            WHERE
-              vbelv = <ls_dlv>-vbeln_vl AND
-              posnv = <ls_dlv>-posnr_vl.
+               ASSIGNING FIELD-SYMBOL(<ls_vbfa>)
+               WHERE
+                         vbelv = <ls_dlv>-vbeln_vl
+                     AND posnv = <ls_dlv>-posnr_vl.
 
-            APPEND VALUE #(
-                vbeln_va = <ls_dlv>-vbeln_va
-                posnr_va = <ls_dlv>-posnr_va
-                vbeln_vl = <ls_dlv>-vbeln_vl
-                posnr_vl = <ls_dlv>-posnr_vl
-                vbeln_vf = <ls_vbfa>-vbeln
-                posnr_vf = <ls_vbfa>-posnn
-                fkart    = <ls_vbfa>-fkart
-                kunrg    = <ls_vbfa>-kunrg
-              ) TO gs_lazy-val-inv.
+            APPEND VALUE #( vbeln_va = <ls_dlv>-vbeln_va
+                            posnr_va = <ls_dlv>-posnr_va
+                            vbeln_vl = <ls_dlv>-vbeln_vl
+                            posnr_vl = <ls_dlv>-posnr_vl
+                            vbeln_vf = <ls_vbfa>-vbeln
+                            posnr_vf = <ls_vbfa>-posnn
+                            fkart    = <ls_vbfa>-fkart
+                            kunrg    = <ls_vbfa>-kunrg )
+                   TO gs_lazy-val-inv.
 
           ENDLOOP.
         ENDLOOP.
@@ -456,7 +429,6 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
 
     rt_map = gs_lazy-val-inv.
   ENDMETHOD.
-
 
   METHOD validate_carrier.
     SELECT SINGLE zsdt_ckkrg_c01~kunnr                  "#EC CI_NOORDER
@@ -477,18 +449,13 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     CASE sy-subrc.
       WHEN 0.
         IF NOT line_exists( c02_lifnr[ table_line = carrier ] ).
-          RAISE EXCEPTION TYPE zcx_sd_order
-            EXPORTING
-              textid = zcx_sd_order=>invalid_carrier_code.
+          RAISE EXCEPTION NEW zcx_sd_order( textid = zcx_sd_order=>invalid_carrier_code ).
         ENDIF.
 
       WHEN OTHERS.
-        RAISE EXCEPTION TYPE zcx_sd_order
-          EXPORTING
-            textid = zcx_sd_order=>missing_carrier_cust.
+        RAISE EXCEPTION NEW zcx_sd_order( textid = zcx_sd_order=>missing_carrier_cust ).
     ENDCASE.
   ENDMETHOD.
-
 
   METHOD wait_until_order_item_created.
     wait_until_order_created( iv_vbeln ).
@@ -497,7 +464,7 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
       SELECT SINGLE mandt FROM vbap
              WHERE vbeln = @iv_vbeln AND
                    posnr = @iv_posnr
-             INTO @sy-mandt ##write_ok.
+             INTO @sy-mandt ##WRITE_OK.
 
       IF sy-subrc = 0.
         RETURN.
@@ -506,29 +473,23 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
       WAIT UP TO 1 SECONDS.
     ENDDO.
 
-    RAISE EXCEPTION TYPE zcx_sd_order
-      EXPORTING
-        textid = zcx_sd_order=>order_item_not_found
-        vbeln  = iv_vbeln
-        posnr  = iv_posnr.
+    RAISE EXCEPTION NEW zcx_sd_order( textid = zcx_sd_order=>order_item_not_found
+                                      vbeln  = iv_vbeln
+                                      posnr  = iv_posnr ).
   ENDMETHOD.
-
 
   METHOD wait_until_order_lockable.
     DO c_max_wait TIMES.
       CALL FUNCTION 'ENQUEUE_EVVBAKE'
-        EXPORTING
-          vbeln          = iv_vbeln
-        EXCEPTIONS
-          foreign_lock   = 1
-          system_failure = 2
-          OTHERS         = 3.
+        EXPORTING  vbeln          = iv_vbeln
+        EXCEPTIONS foreign_lock   = 1
+                   system_failure = 2
+                   OTHERS         = 3.
 
       CASE sy-subrc.
         WHEN 0.
           CALL FUNCTION 'DEQUEUE_EVVBLKE'
-            EXPORTING
-              vbeln = iv_vbeln.
+            EXPORTING vbeln = iv_vbeln.
 
           RETURN.
         WHEN OTHERS.
@@ -536,67 +497,109 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
       ENDCASE.
     ENDDO.
 
-    RAISE EXCEPTION TYPE zcx_bc_lock
-      EXPORTING
-        textid   = zcx_bc_lock=>locked_for_too_long
-        bname    = CONV #( sy-msgv1 )
-        objectid = CONV #( iv_vbeln ).
+    RAISE EXCEPTION NEW zcx_bc_lock( textid   = zcx_bc_lock=>locked_for_too_long
+                                     bname    = CONV #( sy-msgv1 )
+                                     objectid = CONV #( iv_vbeln ) ).
   ENDMETHOD.
 
+  METHOD exists_in_curr_month_for_mat.
+    TRY.
+        result = gt_cur_mon_mat_exist_cache[ KEY primary_key COMPONENTS matnr = matnr ]-existence.
+
+      CATCH cx_sy_itab_line_not_found.
+        DATA(lt_order_existence) = get_mats_in_curr_month( VALUE #( ( matnr ) ) ).
+        result                   = xsdbool( lt_order_existence IS NOT INITIAL ).
+
+        INSERT VALUE #( matnr     = matnr
+                        existence = result )
+               INTO TABLE gt_cur_mon_mat_exist_cache.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD get_mats_in_curr_month.
+    DATA(lt_unique_mats) = VALUE table_matnr( FOR GROUPS _grp OF _mat IN matnrs
+                                              WHERE ( table_line IS NOT INITIAL )
+                                              GROUP BY _mat
+                                              ( _grp ) ).
+
+    CHECK lt_unique_mats IS NOT INITIAL.
+    DATA(lt_readable_mats) = VALUE table_matnr( ).
+
+    LOOP AT lt_unique_mats REFERENCE INTO DATA(lr_unique_mat).
+      CHECK NOT line_exists( gt_cur_mon_mat_exist_cache[ KEY primary_key COMPONENTS matnr = lr_unique_mat->* ] ).
+      APPEND lr_unique_mat->* TO lt_readable_mats.
+      CONTINUE.
+    ENDLOOP.
+
+    IF lt_readable_mats IS NOT INITIAL.
+      DATA(lv_start_of_month) = CONV erdat( |{ sy-datum+0(6) }01| ).
+
+      SELECT FROM   vbak
+                    INNER JOIN vbap ON vbap~vbeln = vbak~vbeln
+                    INNER JOIN @lt_readable_mats AS _mat ON _mat~table_line = vbap~matnr
+             FIELDS DISTINCT vbap~matnr, @abap_true AS existence
+             WHERE  vbak~erdat >= @lv_start_of_month AND
+                    vbak~erdat <= @sy-datum
+             APPENDING CORRESPONDING FIELDS OF TABLE @gt_cur_mon_mat_exist_cache.
+    ENDIF.
+
+    LOOP AT lt_unique_mats REFERENCE INTO lr_unique_mat.
+      TRY.
+          DATA(lr_cache) = REF #( gt_cur_mon_mat_exist_cache[ KEY primary_key COMPONENTS matnr = lr_unique_mat->* ] ).
+          CHECK lr_cache->existence = abap_true.
+          APPEND lr_unique_mat->* TO result.
+
+        CATCH cx_sy_itab_line_not_found.
+          INSERT VALUE #( matnr     = lr_unique_mat->*
+                          existence = abap_false )
+                 INTO TABLE gt_cur_mon_mat_exist_cache.
+      ENDTRY.
+    ENDLOOP.
+  ENDMETHOD.
 
   METHOD get_partner.
     read_partners_lazy( ).
 
-    ASSIGN gs_lazy-val-partners[ KEY primary_key COMPONENTS
-                                 parvw = iv_parvw
-                               ] TO FIELD-SYMBOL(<ls_partner>).
+    ASSIGN gs_lazy-val-partners[ KEY primary_key COMPONENTS parvw = iv_parvw ]
+           TO FIELD-SYMBOL(<ls_partner>).
 
     IF sy-subrc = 0.
       rs_partner = <ls_partner>.
     ELSE.
-      RAISE EXCEPTION TYPE zcx_bc_table_content
-        EXPORTING
-          textid   = zcx_bc_table_content=>entry_missing
-          objectid = |{ gv_vbeln } { iv_parvw }|
-          tabname  = c_tabname-partner.
+      RAISE EXCEPTION NEW zcx_bc_table_content( textid   = zcx_bc_table_content=>entry_missing
+                                                objectid = |{ gv_vbeln } { iv_parvw }|
+                                                tabname  = c_tabname-partner ).
     ENDIF.
   ENDMETHOD.
-
 
   METHOD get_sole_item_number.
     read_vbap_lazy( ).
 
     CASE lines( gs_lazy-val-vbap ).
       WHEN 0.
-        RAISE EXCEPTION TYPE zcx_bc_table_content
-          EXPORTING
-            textid   = zcx_bc_table_content=>entry_missing
-            objectid = CONV #( gv_vbeln )
-            tabname  = c_tabname-item.
+        RAISE EXCEPTION NEW zcx_bc_table_content( textid   = zcx_bc_table_content=>entry_missing
+                                                  objectid = CONV #( gv_vbeln )
+                                                  tabname  = c_tabname-item ).
 
       WHEN 1.
         rv_posnr = gs_lazy-val-vbap[ 1 ]-posnr.
 
       WHEN OTHERS.
-        RAISE EXCEPTION TYPE zcx_bc_table_content
-          EXPORTING
-            textid   = zcx_bc_table_content=>multiple_entries_for_key
-            objectid = CONV #( gv_vbeln )
-            tabname  = c_tabname-item.
+        RAISE EXCEPTION NEW zcx_bc_table_content( textid   = zcx_bc_table_content=>multiple_entries_for_key
+                                                  objectid = CONV #( gv_vbeln )
+                                                  tabname  = c_tabname-item ).
     ENDCASE.
   ENDMETHOD.
-
 
   METHOD get_material_procedure.
     DATA(lv_procedure_matnr) = COND matnr( WHEN iv_upmat IS NOT INITIAL
                                            THEN iv_upmat
                                            ELSE iv_matnr ).
 
-    ASSIGN gt_material_procedure_cache[ KEY primary_key COMPONENTS
-                                        matnr = lv_procedure_matnr
-                                        vkorg = iv_vkorg
-                                        vtweg = iv_vtweg
-                                      ] TO FIELD-SYMBOL(<ls_cache>).
+    ASSIGN gt_material_procedure_cache[ KEY primary_key COMPONENTS matnr = lv_procedure_matnr
+                                                                   vkorg = iv_vkorg
+                                                                   vtweg = iv_vtweg ]
+           TO FIELD-SYMBOL(<ls_cache>).
     IF sy-subrc <> 0.
 
       DATA(ls_cache) = VALUE t_material_procedure_cache( matnr = lv_procedure_matnr
@@ -619,11 +622,9 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     rv_procedure = <ls_cache>-procedure.
   ENDMETHOD.
 
-
   METHOD is_invoiced.
-    rv_invoiced = xsdbool(  get_invoices( ) IS NOT INITIAL ).
+    rv_invoiced = xsdbool( get_invoices( ) IS NOT INITIAL ).
   ENDMETHOD.
-
 
   METHOD is_scope_fat_ayristi.
     IF gs_lazy-flg-sfa IS INITIAL.
@@ -647,7 +648,6 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     rv_tek = gs_lazy-val-sfa.
   ENDMETHOD.
 
-
   METHOD get_header_business_data.
     IF me->gs_lazy-flg-header_vbkd IS INITIAL.
       SELECT SINGLE * FROM vbkd
@@ -662,26 +662,21 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     result = me->gs_lazy-val-header_vbkd.
   ENDMETHOD.
 
-
   METHOD get_item_partner.
     read_item_partners_lazy( ).
 
-    ASSIGN gs_lazy-val-item_partners[ KEY primary_key COMPONENTS
-                                      posnr = iv_posnr
-                                      parvw = iv_parvw
-                                    ] TO FIELD-SYMBOL(<ls_partner>).
+    ASSIGN gs_lazy-val-item_partners[ KEY primary_key COMPONENTS posnr = iv_posnr
+                                                                 parvw = iv_parvw ]
+           TO FIELD-SYMBOL(<ls_partner>).
 
     IF sy-subrc = 0.
       rs_partner = <ls_partner>.
     ELSE.
-      RAISE EXCEPTION TYPE zcx_bc_table_content
-        EXPORTING
-          textid   = zcx_bc_table_content=>entry_missing
-          objectid = |{ gv_vbeln } { iv_posnr } { iv_parvw }|
-          tabname  = c_tabname-partner.
+      RAISE EXCEPTION NEW zcx_bc_table_content( textid   = zcx_bc_table_content=>entry_missing
+                                                objectid = |{ gv_vbeln } { iv_posnr } { iv_parvw }|
+                                                tabname  = c_tabname-partner ).
     ENDIF.
   ENDMETHOD.
-
 
   METHOD read_partners_lazy.
     DATA lv_posnr_initial TYPE vbpa-posnr.
@@ -704,7 +699,6 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     gs_lazy-flg-partners = abap_true.
   ENDMETHOD.
 
-
   METHOD read_vbak_lazy.
     CHECK gs_lazy-flg-vbak = abap_false.
 
@@ -716,7 +710,6 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     ASSERT sy-subrc = 0.
     gs_lazy-flg-vbak = abap_true.
   ENDMETHOD.
-
 
   METHOD read_vbap_lazy.
     CHECK gs_lazy-flg-vbap = abap_false.
@@ -731,12 +724,11 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     gs_lazy-flg-vbap = abap_true.
   ENDMETHOD.
 
-
   METHOD wait_until_order_created.
     DO c_max_wait TIMES.
       SELECT SINGLE mandt FROM vbak
              WHERE vbeln = @iv_vbeln
-             INTO @sy-mandt ##write_ok.
+             INTO @sy-mandt ##WRITE_OK.
 
       IF sy-subrc = 0.
         RETURN.
@@ -745,12 +737,9 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
       WAIT UP TO 1 SECONDS.
     ENDDO.
 
-    RAISE EXCEPTION TYPE zcx_sd_order
-      EXPORTING
-        textid = zcx_sd_order=>order_not_found
-        vbeln  = iv_vbeln.
+    RAISE EXCEPTION NEW zcx_sd_order( textid = zcx_sd_order=>order_not_found
+                                      vbeln  = iv_vbeln ).
   ENDMETHOD.
-
 
   METHOD read_item_partners_lazy.
     DATA empty_posnr TYPE posnr.
@@ -766,13 +755,12 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     gs_lazy-flg-item_partners = abap_true.
   ENDMETHOD.
 
-
   METHOD has_product.
     IF gs_lazy-flg-has_product IS INITIAL.
       read_vbap_lazy( ).
 
-      gs_lazy-val-has_product = xsdbool( line_exists( gs_lazy-val-vbap[ ktgrm = c_ktgrm-end_product ] ) OR
-                                         line_exists( gs_lazy-val-vbap[ ktgrm = c_ktgrm-commercial_good ] ) ).
+      gs_lazy-val-has_product = xsdbool(    line_exists( gs_lazy-val-vbap[ ktgrm = c_ktgrm-end_product ] )
+                                         OR line_exists( gs_lazy-val-vbap[ ktgrm = c_ktgrm-commercial_good ] ) ).
       gs_lazy-flg-has_product = abap_true.
     ENDIF.
 

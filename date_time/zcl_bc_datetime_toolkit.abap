@@ -173,6 +173,17 @@ CLASS zcl_bc_datetime_toolkit DEFINITION
       IMPORTING !perbl_rng    TYPE perbl_range
       RETURNING VALUE(result) TYPE perbl_list.
 
+  class-methods CALCULATE_GROSS_TIME
+    importing
+      !IV_BEGDA type CVA_DATE
+      !IV_ENDDA type CVA_DATE
+      !IV_BEGZT type CVA_TIME
+      !IV_ENDZT type CVA_TIME
+    changing
+      !CV_MESAJ type BAPI_MSG
+    returning
+      value(RV_GROSS) type ZPPD_TSURE .
+
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -957,5 +968,42 @@ CLASS zcl_bc_datetime_toolkit IMPLEMENTATION.
 
       perbl = perbl + 1.
     ENDWHILE.
+  ENDMETHOD.
+
+  METHOD calculate_gross_time.
+    DATA : lv_days TYPE i,
+           lv_time TYPE cva_time,
+           lv_hour TYPE i,
+           lv_minu TYPE i,
+           lv_sec  TYPE i.
+
+    CLEAR : rv_gross,
+            cv_mesaj.
+
+    CALL FUNCTION 'SCOV_TIME_DIFF'
+      EXPORTING  im_date1              = iv_begda
+                 im_date2              = iv_endda
+                 im_time1              = iv_begzt
+                 im_time2              = iv_endzt
+      IMPORTING  ex_days               = lv_days
+                 ex_time               = lv_time
+      EXCEPTIONS start_larger_than_end = 1
+                 OTHERS                = 2.
+
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE 'S' NUMBER sy-msgno
+              WITH sy-msgv1 sy-msgv2 sy-msgv3 INTO cv_mesaj.
+      RETURN.
+    ENDIF.
+
+    " gün dakikaya çevrilir
+    rv_gross = ( lv_days * 24 * 60 ).
+
+    " saat dakikaya çevrilir
+    lv_hour = lv_time(2).
+    lv_minu = lv_time+2(2).
+    lv_sec  = lv_time+4(2).
+
+    rv_gross += ( lv_hour * 60 ) + lv_minu + ( lv_sec / 60 ).
   ENDMETHOD.
 ENDCLASS.

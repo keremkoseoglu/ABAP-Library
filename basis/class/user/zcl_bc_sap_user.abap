@@ -92,6 +92,10 @@ CLASS zcl_bc_sap_user DEFINITION
       RAISING   zcx_bc_authorization
                 zcx_bc_lock.
 
+    METHODS get_manager
+      RETURNING VALUE(result) TYPE REF TO zcl_bc_sap_user
+      RAISING   zcx_hr_manager_determination.
+
   PRIVATE SECTION.
     TYPES: BEGIN OF t_lazy_flag,
              email      TYPE abap_bool,
@@ -145,6 +149,7 @@ CLASS zcl_bc_sap_user DEFINITION
     DATA gs_lazy_flag TYPE t_lazy_flag.
     DATA gs_lazy_var  TYPE t_lazy_var.
     DATA gs_usr02     TYPE usr02.
+    DATA go_manager   TYPE REF TO zcl_bc_sap_user.
 
     CLASS-METHODS dequeue_user
       IMPORTING iv_bname TYPE xubname.
@@ -434,7 +439,8 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
 
   METHOD get_pwd_chg_date.
     gs_lazy_flag-pwdchgdate = SWITCH #( iv_force_fresh
-                                        WHEN abap_true THEN abap_false ).
+                                        WHEN abap_true
+                                        THEN abap_false ).
 
     IF gs_lazy_flag-pwdchgdate = abap_false.
 
@@ -519,6 +525,22 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
       ENDTRY.
 
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD get_manager.
+    IF go_manager IS INITIAL.
+      DATA(employee_email) = get_email( ).
+
+      IF employee_email IS INITIAL.
+        RAISE EXCEPTION NEW zcx_hr_manager_determination( textid = zcx_hr_manager_determination=>empty_user_email
+                                                          bname  = gv_bname ).
+      ENDIF.
+
+      DATA(org_chart) = zcl_hr_org_chart=>get_default_provider( ).
+      go_manager = org_chart->get_manager_via_email( employee_email ).
+    ENDIF.
+
+    result = go_manager.
   ENDMETHOD.
 
   METHOD set_pwd_chg_date_bulk.

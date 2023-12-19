@@ -20,12 +20,12 @@ CLASS zcl_bc_distribution_list DEFINITION
       remove_mail_from_all_lists
         IMPORTING !iv_email        TYPE ad_smtpadr
         EXPORTING !et_removed_from TYPE tt_soid
-        RAISING   zcx_bc_dist_list_remove_mail.
+        RAISING  resumable(zcx_bc_dist_list_remove_mail).
 
     METHODS remove_mail
       IMPORTING !iv_email   TYPE ad_smtpadr
       EXPORTING !ev_removed TYPE abap_bool
-      RAISING   zcx_bc_dist_list_remove_mail.
+      RAISING   resumable(zcx_bc_dist_list_remove_mail).
 
     METHODS get_members
       RETURNING VALUE(result) TYPE tt_members
@@ -65,7 +65,8 @@ ENDCLASS.
 
 
 
-CLASS zcl_bc_distribution_list IMPLEMENTATION.
+CLASS ZCL_BC_DISTRIBUTION_LIST IMPLEMENTATION.
+
 
   METHOD cache_all_distribution_lists.
     CHECK gv_all_dist_lists_cached EQ abap_false.
@@ -100,27 +101,6 @@ CLASS zcl_bc_distribution_list IMPLEMENTATION.
     ENDIF.
 
     ro_obj = <ls_multiton>-dlist.
-  ENDMETHOD.
-
-
-  METHOD remove_mail_from_all_lists.
-
-    CLEAR et_removed_from.
-    cache_all_distribution_lists(  ).
-
-    LOOP AT gt_multiton ASSIGNING FIELD-SYMBOL(<ls_multiton>).
-      TRY.
-          <ls_multiton>-dlist->remove_mail( EXPORTING iv_email   = iv_email
-                                            IMPORTING ev_removed = DATA(lv_removed) ).
-
-          IF lv_removed EQ abap_true.
-            APPEND <ls_multiton>-dlist->gs_definition TO et_removed_from.
-          ENDIF.
-
-        CATCH zcx_bc_dist_list_remove_mail INTO DATA(lo_remove_error).
-          RAISE RESUMABLE EXCEPTION lo_remove_error.
-      ENDTRY.
-    ENDLOOP.
   ENDMETHOD.
 
 
@@ -173,11 +153,23 @@ CLASS zcl_bc_distribution_list IMPLEMENTATION.
 
 
   METHOD constructor.
-    SELECT SINGLE * FROM soid
-           WHERE objnam EQ @iv_objnam
-           INTO CORRESPONDING FIELDS OF @gs_definition.
+*{   REPLACE        TPXK901107                                        1
+*\    SELECT SINGLE * FROM soid
+*\           WHERE objnam EQ @iv_objnam
+*\           INTO CORRESPONDING FIELDS OF @gs_definition.
+*\                                                        "#EC CI_NOFIRST
+*\                                                        "#EC CI_NOORDER
+*S4Hana Code Conversion by murat.sahin@detaysoft.com 11.04.2022 13:16:37 {
+*tüm keyleri verilmeyen select single dönüşümü
+  SELECT  * FROM soid
+            WHERE objnam EQ @iv_objnam ORDER BY primary KEY
+            INTO CORRESPONDING FIELDS OF @gs_definition  UP TO 1 ROWS .
+ ENDSELECT.
                                                         "#EC CI_NOFIRST
                                                         "#EC CI_NOORDER
+*S4Hana Code Conversion by murat.sahin@detaysoft.com 11.04.2022 13:16:37 }
+
+*}   REPLACE
 
     IF sy-subrc NE 0.
       RAISE EXCEPTION TYPE cx_no_entry_in_table
@@ -226,4 +218,24 @@ CLASS zcl_bc_distribution_list IMPLEMENTATION.
     gv_members_read = abap_true.
   ENDMETHOD.
 
+
+  METHOD remove_mail_from_all_lists.
+
+    CLEAR et_removed_from.
+    cache_all_distribution_lists(  ).
+
+    LOOP AT gt_multiton ASSIGNING FIELD-SYMBOL(<ls_multiton>).
+      TRY.
+          <ls_multiton>-dlist->remove_mail( EXPORTING iv_email   = iv_email
+                                            IMPORTING ev_removed = DATA(lv_removed) ).
+
+          IF lv_removed EQ abap_true.
+            APPEND <ls_multiton>-dlist->gs_definition TO et_removed_from.
+          ENDIF.
+
+        CATCH zcx_bc_dist_list_remove_mail INTO DATA(lo_remove_error).
+          RAISE RESUMABLE EXCEPTION lo_remove_error.
+      ENDTRY.
+    ENDLOOP.
+  ENDMETHOD.
 ENDCLASS.

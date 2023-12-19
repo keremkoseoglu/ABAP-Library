@@ -1,7 +1,7 @@
 CLASS zcl_bc_uom DEFINITION
   PUBLIC
   FINAL
-  CREATE PRIVATE.
+  CREATE PRIVATE .
 
   PUBLIC SECTION.
     DATA gs_def TYPE t006 READ-ONLY.
@@ -12,7 +12,7 @@ CLASS zcl_bc_uom DEFINITION
       RAISING   zcx_bc_table_content.
 
     CLASS-METHODS get_instance_iso
-      IMPORTING iv_iso_code   TYPE t006-isocode
+      IMPORTING !iv_iso_code  TYPE t006-isocode
       RETURNING VALUE(ro_uom) TYPE REF TO zcl_bc_uom
       RAISING   zcx_bc_table_content.
 
@@ -23,6 +23,7 @@ CLASS zcl_bc_uom DEFINITION
       CHANGING  cv_mesaj             TYPE bapi_msg
       RETURNING VALUE(rv_new_amount) TYPE zppd_tsure.
 
+  PROTECTED SECTION.
   PRIVATE SECTION.
     TYPES: BEGIN OF t_multiton,
              msehi TYPE msehi,
@@ -52,6 +53,7 @@ CLASS zcl_bc_uom DEFINITION
       RAISING   zcx_bc_table_content.
 
 ENDCLASS.
+
 
 
 CLASS zcl_bc_uom IMPLEMENTATION.
@@ -130,20 +132,23 @@ CLASS zcl_bc_uom IMPLEMENTATION.
             cv_mesaj.
 
     CALL FUNCTION 'UNIT_CONVERSION_SIMPLE'
-      EXPORTING  input                = iv_old_amount
-                 unit_in              = iv_old_unit
-                 unit_out             = iv_new_unit
-      IMPORTING  output               = rv_new_amount
-      EXCEPTIONS conversion_not_found = 1
-                 division_by_zero     = 23
-                 input_invalid        = 3
-                 output_invalid       = 4
-                 overflow             = 5
-                 type_invalid         = 6
-                 units_missing        = 7
-                 unit_in_not_found    = 8
-                 unit_out_not_found   = 9
-                 OTHERS               = 10.
+      EXPORTING
+        input                = iv_old_amount
+        unit_in              = iv_old_unit
+        unit_out             = iv_new_unit
+      IMPORTING
+        output               = rv_new_amount
+      EXCEPTIONS
+        conversion_not_found = 1
+        division_by_zero     = 23
+        input_invalid        = 3
+        output_invalid       = 4
+        overflow             = 5
+        type_invalid         = 6
+        units_missing        = 7
+        unit_in_not_found    = 8
+        unit_out_not_found   = 9
+        OTHERS               = 10.
 
     IF sy-subrc <> 0.
       MESSAGE ID sy-msgid TYPE 'I' NUMBER sy-msgno

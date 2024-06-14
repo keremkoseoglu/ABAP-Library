@@ -1,6 +1,5 @@
 CLASS zcl_bc_transport_request DEFINITION
-  PUBLIC
-  FINAL
+  PUBLIC FINAL
   CREATE PRIVATE.
 
   PUBLIC SECTION.
@@ -159,11 +158,12 @@ CLASS zcl_bc_transport_request DEFINITION
       RETURNING VALUE(rt_object) TYPE tt_request_and_object.
 
     CLASS-METHODS get_request_objects
-      IMPORTING it_trkorr_rng    TYPE zbctt_trkorr_rng
-                it_pgmid_rng     TYPE tt_pgmid_rng OPTIONAL
-                iv_read_creation TYPE abap_bool    DEFAULT abap_false
-      EXPORTING et_list          TYPE zcl_bc_dol_model=>tt_dol_list
-                et_list_wr       TYPE zcl_bc_dol_model=>tt_dol_list_wr.
+      IMPORTING it_trkorr_rng      TYPE zbctt_trkorr_rng
+                it_pgmid_rng       TYPE tt_pgmid_rng OPTIONAL
+                iv_read_creation   TYPE abap_bool    DEFAULT abap_false
+                iv_include_deleted TYPE abap_bool    DEFAULT abap_false
+      EXPORTING et_list            TYPE zcl_bc_dol_model=>tt_dol_list
+                et_list_wr         TYPE zcl_bc_dol_model=>tt_dol_list_wr.
 
     CLASS-METHODS get_requests_containing_obj
       IMPORTING it_obj            TYPE tt_request_object_tag
@@ -320,7 +320,8 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
 
   METHOD add_objects_from_request.
     TRY.
-        me->core->add_objects_from_request( from              = VALUE #( FOR _from IN it_from ( _from-trkorr ) )
+        me->core->add_objects_from_request( from              = VALUE #( FOR _from IN it_from
+                                                                         ( _from-trkorr ) )
                                             wait              = iv_wait
                                             sort_and_compress = iv_sort_and_compress ).
 
@@ -336,11 +337,11 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
 
   METHOD create_new_request.
     TRY.
-        DATA(core) = ycl_addict_transport_request=>create_new_request(
-                         trfunction = iv_trfunction
-                         as4text    = iv_as4text
-                         users      = VALUE #( FOR _user IN it_user ( _user-bname ) )
-                         target     = iv_target ).
+        DATA(core) = ycl_addict_transport_request=>create_new_request( trfunction = iv_trfunction
+                                                                       as4text    = iv_as4text
+                                                                       users      = VALUE #( FOR _user IN it_user
+                                                                                             ( _user-bname ) )
+                                                                       target     = iv_target ).
 
       CATCH ycx_addict_table_content INTO DATA(table_error).
         zcx_bc_table_content=>raise_from_addict( table_error ).
@@ -352,7 +353,8 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD create_subtask.
-    me->core->create_subtask( user = VALUE #( FOR _user IN it_user ( _user-bname ) ) ).
+    me->core->create_subtask( user = VALUE #( FOR _user IN it_user
+                                              ( _user-bname ) ) ).
   ENDMETHOD.
 
   METHOD get_empty_open_requests.
@@ -471,11 +473,12 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_request_objects.
-    ycl_addict_transport_request=>get_request_objects( EXPORTING trkorr_rng    = CORRESPONDING #( it_trkorr_rng )
-                                                                 pgmid_rng     = CORRESPONDING #( it_pgmid_rng )
-                                                                 read_creation = iv_read_creation
-                                                       IMPORTING list          = DATA(list)
-                                                                 list_wr       = DATA(list_wr) ).
+    ycl_addict_transport_request=>get_request_objects( EXPORTING trkorr_rng      = CORRESPONDING #( it_trkorr_rng )
+                                                                 pgmid_rng       = CORRESPONDING #( it_pgmid_rng )
+                                                                 read_creation   = iv_read_creation
+                                                                 include_deleted = iv_include_deleted
+                                                       IMPORTING list            = DATA(list)
+                                                                 list_wr         = DATA(list_wr) ).
 
     et_list    = CORRESPONDING #( list ).
     et_list_wr = CORRESPONDING #( list_wr ).

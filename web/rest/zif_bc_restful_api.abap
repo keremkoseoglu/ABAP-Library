@@ -1,5 +1,5 @@
 INTERFACE zif_bc_restful_api
-  PUBLIC .
+  PUBLIC.
 
   CONSTANTS: BEGIN OF class,
                me TYPE seoclsname VALUE 'ZIF_BC_RESTFUL_API',
@@ -11,6 +11,7 @@ INTERFACE zif_bc_restful_api
 
   METHODS accept_json_input
     IMPORTING json_input         TYPE string
+              apiid              TYPE zbcd_restful_apiid OPTIONAL
     RETURNING VALUE(json_output) TYPE string
     RAISING   zcx_bc_class_method.
 

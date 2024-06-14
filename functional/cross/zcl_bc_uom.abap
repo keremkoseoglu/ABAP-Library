@@ -1,7 +1,6 @@
 CLASS zcl_bc_uom DEFINITION
-  PUBLIC
-  FINAL
-  CREATE PRIVATE .
+  PUBLIC FINAL
+  CREATE PRIVATE.
 
   PUBLIC SECTION.
     DATA gs_def TYPE t006 READ-ONLY.
@@ -12,7 +11,7 @@ CLASS zcl_bc_uom DEFINITION
       RAISING   zcx_bc_table_content.
 
     CLASS-METHODS get_instance_iso
-      IMPORTING !iv_iso_code  TYPE t006-isocode
+      IMPORTING iv_iso_code   TYPE t006-isocode
       RETURNING VALUE(ro_uom) TYPE REF TO zcl_bc_uom
       RAISING   zcx_bc_table_content.
 
@@ -23,7 +22,14 @@ CLASS zcl_bc_uom DEFINITION
       CHANGING  cv_mesaj             TYPE bapi_msg
       RETURNING VALUE(rv_new_amount) TYPE zppd_tsure.
 
-  PROTECTED SECTION.
+    METHODS get_dimension
+      RETURNING VALUE(result) TYPE REF TO zif_bc_dimension
+      RAISING   zcx_bc_dimension.
+
+    METHODS get_dimension_uom_range RETURNING VALUE(result) TYPE mdg_bs_mat_t_range_meinh.
+
+    METHODS is_weight               RETURNING VALUE(result) TYPE abap_bool.
+
   PRIVATE SECTION.
     TYPES: BEGIN OF t_multiton,
              msehi TYPE msehi,
@@ -45,15 +51,23 @@ CLASS zcl_bc_uom DEFINITION
 
     CONSTANTS c_tabname_def TYPE tabname VALUE 'T006'.
 
+    CONSTANTS: BEGIN OF c_dimid,
+                 mass TYPE t006-dimid VALUE 'MASS',
+               END OF c_dimid.
+
     CLASS-DATA: gt_multiton     TYPE tt_multiton,
                 gt_iso_multiton TYPE tt_iso_multiton.
+
+    DATA: gv_dimension_read    TYPE abap_bool,
+          go_dimension_error   TYPE REF TO zcx_bc_dimension,
+          go_dimension         TYPE REF TO zif_bc_dimension,
+          gt_dimension_uom_rng TYPE mdg_bs_mat_t_range_meinh.
 
     METHODS constructor
       IMPORTING iv_msehi TYPE msehi
       RAISING   zcx_bc_table_content.
 
 ENDCLASS.
-
 
 
 CLASS zcl_bc_uom IMPLEMENTATION.
@@ -132,27 +146,59 @@ CLASS zcl_bc_uom IMPLEMENTATION.
             cv_mesaj.
 
     CALL FUNCTION 'UNIT_CONVERSION_SIMPLE'
-      EXPORTING
-        input                = iv_old_amount
-        unit_in              = iv_old_unit
-        unit_out             = iv_new_unit
-      IMPORTING
-        output               = rv_new_amount
-      EXCEPTIONS
-        conversion_not_found = 1
-        division_by_zero     = 23
-        input_invalid        = 3
-        output_invalid       = 4
-        overflow             = 5
-        type_invalid         = 6
-        units_missing        = 7
-        unit_in_not_found    = 8
-        unit_out_not_found   = 9
-        OTHERS               = 10.
+      EXPORTING  input                = iv_old_amount
+                 unit_in              = iv_old_unit
+                 unit_out             = iv_new_unit
+      IMPORTING  output               = rv_new_amount
+      EXCEPTIONS conversion_not_found = 1
+                 division_by_zero     = 23
+                 input_invalid        = 3
+                 output_invalid       = 4
+                 overflow             = 5
+                 type_invalid         = 6
+                 units_missing        = 7
+                 unit_in_not_found    = 8
+                 unit_out_not_found   = 9
+                 OTHERS               = 10.
 
     IF sy-subrc <> 0.
       MESSAGE ID sy-msgid TYPE 'I' NUMBER sy-msgno
               WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 INTO cv_mesaj.
     ENDIF.
+  ENDMETHOD.
+
+  METHOD get_dimension.
+    IF gv_dimension_read = abap_false.
+      TRY.
+          go_dimension = CAST #( zcl_bc_dimension=>get_instance( gs_def-dimid ) ).
+        CATCH zcx_bc_dimension INTO go_dimension_error ##NO_HANDLER.
+      ENDTRY.
+
+      gv_dimension_read = abap_true.
+    ENDIF.
+
+    IF go_dimension_error IS NOT INITIAL.
+      RAISE EXCEPTION go_dimension_error.
+    ENDIF.
+
+    result = go_dimension.
+  ENDMETHOD.
+
+  METHOD get_dimension_uom_range.
+    IF gt_dimension_uom_rng IS INITIAL.
+      TRY.
+          gt_dimension_uom_rng = get_dimension( )->get_uom_range( ).
+        CATCH zcx_bc_dimension.
+          gt_dimension_uom_rng = VALUE #( ( sign   = ycl_addict_toolkit=>sign-include
+                                            option = ycl_addict_toolkit=>option-eq
+                                            low    = gs_def-msehi ) ).
+      ENDTRY.
+    ENDIF.
+
+    result = gt_dimension_uom_rng.
+  ENDMETHOD.
+
+  METHOD is_weight.
+    result = xsdbool( gs_def-dimid = c_dimid-mass ).
   ENDMETHOD.
 ENDCLASS.

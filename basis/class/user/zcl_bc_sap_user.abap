@@ -1,6 +1,5 @@
 CLASS zcl_bc_sap_user DEFINITION
-  PUBLIC
-  FINAL
+  PUBLIC FINAL
   CREATE PRIVATE.
 
   PUBLIC SECTION.
@@ -96,21 +95,31 @@ CLASS zcl_bc_sap_user DEFINITION
       RETURNING VALUE(result) TYPE REF TO zcl_bc_sap_user
       RAISING   zcx_hr_manager_determination.
 
+    METHODS get_unit_manager
+      RETURNING VALUE(result) TYPE REF TO zcl_bc_sap_user
+      RAISING   zcx_hr_manager_determination.
+
+    METHODS get_work_center
+      RETURNING VALUE(result) TYPE object_person_assignment
+      RAISING   zcx_bc_user_work_center.
+
   PRIVATE SECTION.
     TYPES: BEGIN OF t_lazy_flag,
-             email      TYPE abap_bool,
-             full_name  TYPE abap_bool,
-             mobile     TYPE abap_bool,
-             pwdchgdate TYPE abap_bool,
-             uname_text TYPE abap_bool,
+             email       TYPE abap_bool,
+             full_name   TYPE abap_bool,
+             mobile      TYPE abap_bool,
+             pwdchgdate  TYPE abap_bool,
+             uname_text  TYPE abap_bool,
+             work_center TYPE abap_bool,
            END OF t_lazy_flag,
 
            BEGIN OF t_lazy_var,
-             email      TYPE ad_smtpadr,
-             full_name  TYPE full_name,
-             mobile     TYPE ad_tlnmbr,
-             pwdchgdate TYPE xubcdat,
-             uname_text TYPE name_text,
+             email       TYPE ad_smtpadr,
+             full_name   TYPE full_name,
+             mobile      TYPE ad_tlnmbr,
+             pwdchgdate  TYPE xubcdat,
+             uname_text  TYPE name_text,
+             work_center TYPE object_person_assignment,
            END OF t_lazy_var.
 
     TYPES: BEGIN OF t_multiton,
@@ -136,6 +145,8 @@ CLASS zcl_bc_sap_user DEFINITION
              user_email TYPE tt_user_email,
            END OF t_clazy_var.
 
+    TYPES tt_rcrid TYPE STANDARD TABLE OF rcrid WITH KEY table_line.
+
     CONSTANTS: BEGIN OF c_table,
                  adr6 TYPE tabname VALUE 'ADR6',
                END OF c_table.
@@ -146,10 +157,11 @@ CLASS zcl_bc_sap_user DEFINITION
     CLASS-DATA gs_clazy_var  TYPE t_clazy_var.
     CLASS-DATA gt_multiton   TYPE tt_multiton.
 
-    DATA gs_lazy_flag TYPE t_lazy_flag.
-    DATA gs_lazy_var  TYPE t_lazy_var.
-    DATA gs_usr02     TYPE usr02.
-    DATA go_manager   TYPE REF TO zcl_bc_sap_user.
+    DATA gs_lazy_flag    TYPE t_lazy_flag.
+    DATA gs_lazy_var     TYPE t_lazy_var.
+    DATA gs_usr02        TYPE usr02.
+    DATA go_manager      TYPE REF TO zcl_bc_sap_user.
+    DATA go_unit_manager TYPE REF TO zcl_bc_sap_user.
 
     CLASS-METHODS dequeue_user
       IMPORTING iv_bname TYPE xubname.
@@ -326,9 +338,9 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
     IF gs_lazy_flag-full_name = abap_false.
 
       SELECT SINGLE name_first && @space && name_last
-        INTO @gs_lazy_var-full_name
-        FROM adrp
-        WHERE persnumber = ( SELECT persnumber FROM usr21 WHERE bname = @gv_bname )
+             INTO @gs_lazy_var-full_name
+             FROM adrp
+             WHERE persnumber = ( SELECT persnumber FROM usr21 WHERE bname = @gv_bname )
         ##WARN_OK.                                      "#EC CI_NOORDER
 
       gs_lazy_flag-full_name = abap_true.
@@ -416,11 +428,12 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
 
       SELECT SINGLE adr2~tel_number
              FROM usr21
-                 INNER JOIN adr2 ON adr2~addrnumber = usr21~addrnumber AND
-                                    adr2~persnumber = usr21~persnumber
-             WHERE usr21~bname      = @gv_bname AND
-                   adr2~date_from  <= @sy-datum AND
-                   adr2~tel_number <> @space
+                  INNER JOIN adr2
+                    ON  adr2~addrnumber = usr21~addrnumber
+                    AND adr2~persnumber = usr21~persnumber
+             WHERE usr21~bname      = @gv_bname
+               AND adr2~date_from  <= @sy-datum
+               AND adr2~tel_number <> @space
              INTO @gs_lazy_var-mobile.
       "#EC CI_NOORDER
 
@@ -456,10 +469,9 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
 
   METHOD get_uname_text.
     IF gs_lazy_flag-uname_text = abap_false.
-      SELECT SINGLE name_textc
-        INTO @gs_lazy_var-uname_text
-        FROM user_addr
-        WHERE bname = @gv_bname
+      SELECT SINGLE name_textc INTO @gs_lazy_var-uname_text
+             FROM user_addr
+             WHERE bname = @gv_bname
         ##WARN_OK.                                      "#EC CI_NOORDER
 
       gs_lazy_flag-uname_text = abap_true.
@@ -475,10 +487,12 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
   METHOD read_all_user_emails_lazy.
     CHECK gs_clazy_flag-user_email = abap_false.
 
-    SELECT DISTINCT usr21~bname, adr6~smtp_addr AS email
+    SELECT DISTINCT usr21~bname,
+                    adr6~smtp_addr AS email
            FROM adr6
-           INNER JOIN usr21 ON usr21~persnumber = adr6~persnumber AND
-                               usr21~addrnumber = adr6~addrnumber
+                INNER JOIN usr21
+                  ON  usr21~persnumber = adr6~persnumber
+                  AND usr21~addrnumber = adr6~addrnumber
            INTO CORRESPONDING FIELDS OF TABLE @gs_clazy_var-user_email.
 
     LOOP AT gs_clazy_var-user_email ASSIGNING FIELD-SYMBOL(<ls_user_email>).
@@ -541,6 +555,69 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
     ENDIF.
 
     result = go_manager.
+  ENDMETHOD.
+
+  METHOD get_unit_manager.
+    IF go_unit_manager IS INITIAL.
+      DATA(employee_email) = get_email( ).
+
+      IF employee_email IS INITIAL.
+        RAISE EXCEPTION NEW zcx_hr_manager_determination( textid = zcx_hr_manager_determination=>empty_user_email
+                                                          bname  = gv_bname ).
+      ENDIF.
+
+      DATA(org_chart) = zcl_hr_org_chart=>get_default_provider( ).
+      go_unit_manager = org_chart->get_unit_manager_via_email( employee_email ).
+    ENDIF.
+
+    result = go_unit_manager.
+  ENDMETHOD.
+
+  METHOD get_work_center.
+    IF gs_lazy_flag-work_center IS INITIAL.
+      DO 1 TIMES.
+        DATA(users) = VALUE pernr_us_tab( ).
+
+        CALL FUNCTION 'HR_GET_EMPLOYEES_FROM_USER'
+          EXPORTING user              = sy-uname
+                    begda             = sy-datum
+                    endda             = sy-datum
+                    iv_with_authority = abap_true
+          TABLES    ee_tab            = users.
+
+        CHECK users IS NOT INITIAL.
+
+        DATA(person_assignments) = VALUE tt_rcrid( ( objty = 'P'
+                                                     objid = users[ 1 ]-pernr ) ).
+
+        DATA(workcenters_of_person) = VALUE rplm_tt_person_assignment( ).
+
+        CALL FUNCTION 'COI2_WORKCENTER_OF_PERSON'
+          EXPORTING  begda                       = sy-datum
+                     endda                       = sy-datum
+                     in_plvar                    = '01'
+          TABLES     in_object                   = person_assignments
+                     out_object                  = workcenters_of_person
+          EXCEPTIONS no_in_objects               = 1
+                     invalid_object              = 2
+                     invalid_hr_planning_variant = 3
+                     other_error                 = 4
+                     evaluation_path_not_found   = 5
+                     OTHERS                      = 6.
+
+        CHECK sy-subrc = 0 AND workcenters_of_person IS NOT INITIAL.
+        gs_lazy_var-work_center = workcenters_of_person[ 1 ].
+      ENDDO.
+
+      gs_lazy_flag-work_center = abap_true.
+    ENDIF.
+
+    IF gs_lazy_var-work_center IS INITIAL.
+      RAISE EXCEPTION NEW zcx_bc_user_work_center( textid = zcx_bc_user_work_center=>cant_determine_work_center
+                                                   bname  = sy-uname ).
+    ENDIF.
+
+    result = gs_lazy_var-work_center.
   ENDMETHOD.
 
   METHOD set_pwd_chg_date_bulk.

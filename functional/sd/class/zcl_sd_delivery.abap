@@ -1,6 +1,5 @@
 CLASS zcl_sd_delivery DEFINITION
-  PUBLIC
-  FINAL
+  PUBLIC FINAL
   CREATE PRIVATE.
 
   PUBLIC SECTION.
@@ -184,11 +183,10 @@ CLASS zcl_sd_delivery DEFINITION
         cx    TYPE REF TO zcx_sd_delivery_def,
         obj   TYPE REF TO zcl_sd_delivery,
       END OF t_multiton.
-    TYPES tt_multiton
-              TYPE HASHED TABLE OF t_multiton
+    TYPES tt_multiton TYPE HASHED TABLE OF t_multiton
               WITH UNIQUE KEY primary_key COMPONENTS vbeln.
 
-    TYPES vtweg_list TYPE STANDARD TABLE OF vtweg WITH KEY table_line.
+    TYPES vtweg_list  TYPE STANDARD TABLE OF vtweg WITH KEY table_line.
 
     CONSTANTS:
       BEGIN OF c_pkstk,
@@ -221,16 +219,14 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
 
   METHOD constructor.
     TRY.
-        SELECT SINGLE likp~vbeln, likp~kunnr, likp~btgew, likp~gewei,
-                      likp~vstel, likp~vbtyp, likp~wadat_ist, likp~kunag,
-                      likp~lfart, likp~vkorg,
-                      vbuk~gbstk, vbuk~wbstk, vbuk~kostk, vbuk~pkstk
+        SELECT SINGLE likp~vbeln, likp~kunnr, likp~btgew, likp~gewei, likp~vstel, likp~vbtyp, likp~wadat_ist,
+                      likp~kunag, likp~lfart, likp~vkorg, vbuk~gbstk, vbuk~wbstk, vbuk~kostk, vbuk~pkstk
                FROM likp
 *S4Hana conversion begin change by busra.acikmese@detaysoft.com 22 Nis 2022 10:49:49 {
 *             LEFT JOIN vbuk
-               LEFT JOIN v_vbuk_s4 AS vbuk
+                    LEFT JOIN v_vbuk_s4 AS vbuk
 *S4Hana conversion end change by busra.acikmese@detaysoft.com 22 Nis 2022 10:49:49 }
-                    ON vbuk~vbeln = likp~vbeln
+                      ON vbuk~vbeln = likp~vbeln
                WHERE likp~vbeln = @iv_vbeln
                INTO CORRESPONDING FIELDS OF @gs_head.   "#EC CI_NOORDER
 
@@ -273,9 +269,9 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
     IF gs_lazy-flg-eff_mat_doc IS INITIAL.
       DO 1 TIMES.
         SELECT DISTINCT vbeln, mjahr FROM vbfa
-               WHERE vbelv   = @gs_head-vbeln AND
-                     vbtyp_v = @gs_head-vbtyp AND
-                     vbtyp_n = @me->vbtyp-mat_doc
+               WHERE vbelv   = @gs_head-vbeln
+                 AND vbtyp_v = @gs_head-vbtyp
+                 AND vbtyp_n = @me->vbtyp-mat_doc
                INTO TABLE @DATA(mat_docs).
 
         DATA(mkpf_keys) = CORRESPONDING zcl_mm_material_document=>mat_doc_key_list( mat_docs MAPPING mblnr = vbeln ).
@@ -283,8 +279,8 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
 
         SELECT mblnr FROM zmmv_effective_mat_doc
                FOR ALL ENTRIES IN @mkpf_keys
-               WHERE mblnr = @mkpf_keys-mblnr AND
-                     mjahr = @mkpf_keys-mjahr
+               WHERE mblnr = @mkpf_keys-mblnr
+                 AND mjahr = @mkpf_keys-mjahr
                INTO TABLE @DATA(effective_mat_docs).
 
         gs_lazy-val-eff_mat_doc = xsdbool( effective_mat_docs IS NOT INITIAL ).
@@ -335,9 +331,8 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
     ENDIF.
 
     IF gs_lazy-flg-item = abap_false.
-      SELECT posnr, lgort, werks, vgbel, vgpos, vgtyp, matnr,
-             vrkme, lfimg, meins, pstyv, uecha, lgmng, charg,
-             xchpf, uepos, bwtar, brgew, ntgew, gewei, vtweg
+      SELECT posnr, lgort, werks, vgbel, vgpos, vgtyp, matnr, vrkme, lfimg, meins, pstyv, uecha, lgmng, charg, xchpf,
+             uepos, bwtar, brgew, ntgew, gewei, vtweg
              FROM lips
              WHERE vbeln = @gs_head-vbeln
              INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-item ##TOO_MANY_ITAB_FIELDS.
@@ -430,7 +425,7 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
                                     THEN gs_head-kunag
                                     ELSE gs_head-kunnr ).
 
-    result = zcl_sd_customer=>get_instance( cargo_kunnr )->is_multi_cargo( ).
+    result = CAST zif_sd_ckkrg_customer_set( zcl_sd_ckkrg_all_customers=>get_instance( ) )->has_customer( cargo_kunnr ).
   ENDMETHOD.
 
   METHOD get_orders.
@@ -500,7 +495,8 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
                 zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'UNIT_CONVERSION_SIMPLE' ).
             ENDCASE.
 
-            gs_lazy-val-total_weight_wo_hu-btgew += converted_lips_weight.
+            gs_lazy-val-total_weight_wo_hu-btgew +=
+                                                 converted_lips_weight.
           ENDLOOP.
 
           gs_lazy-flg-total_weight_wo_hu = abap_true.
@@ -523,8 +519,9 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
   METHOD has_multi_dlv_order.
     SELECT DISTINCT vbfa~vbeln
            FROM lips
-                INNER JOIN vbfa ON vbfa~vbelv   = lips~vgbel AND
-                                   vbfa~vbtyp_n = 'J'
+                INNER JOIN vbfa
+                  ON  vbfa~vbelv   = lips~vgbel
+                  AND vbfa~vbtyp_n = 'J'
            WHERE lips~vbeln = @gs_head-vbeln
            INTO TABLE @DATA(vbelns).
 
@@ -602,15 +599,16 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
                 zcx_bc_function_subrc=>raise_if_sysubrc_not_initial( 'UNIT_CONVERSION_SIMPLE' ).
             ENDCASE.
 
-            gs_lazy-val-total_weight-btgew += lips_brgew.
+            gs_lazy-val-total_weight-btgew +=
+                                           lips_brgew.
           ENDLOOP.
 
           " VEKP toplamı """"""""""""""""""""""""""""""""""""""""""""""""
           DATA(lv_vpobjkey) = CONV vpobjkey( gs_head-vbeln ).
 
           SELECT tarag, gewei FROM vekp
-                 WHERE vpobj    = @c_vpobj-delivery AND
-                       vpobjkey = @lv_vpobjkey
+                 WHERE vpobj    = @c_vpobj-delivery
+                   AND vpobjkey = @lv_vpobjkey
                  INTO TABLE @DATA(lt_vekp).
 
           LOOP AT lt_vekp ASSIGNING FIELD-SYMBOL(<ls_vekp>).

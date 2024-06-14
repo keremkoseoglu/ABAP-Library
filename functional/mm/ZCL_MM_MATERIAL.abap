@@ -1,6 +1,5 @@
 CLASS zcl_mm_material DEFINITION
-  PUBLIC
-  FINAL
+  PUBLIC FINAL
   CREATE PRIVATE.
 
   PUBLIC SECTION.
@@ -228,6 +227,36 @@ CLASS zcl_mm_material DEFINITION
       RETURNING VALUE(result) TYPE mengv13
       RAISING   zcx_mm_material_unit_conv.
 
+    METHODS conv_quan_to_base_uom_on_per
+      IMPORTING from_menge      TYPE rke2_vvmi0
+                from_meins      TYPE meins
+                jahrper         TYPE jahrper
+      EXPORTING converted_menge TYPE rke2_vvmi2
+                converted_meins TYPE ekpo-meins
+      RAISING   zcx_mm_material_unit_conv.
+
+    METHODS conv_quan_fr_base_uom_on_per
+      IMPORTING from_menge      TYPE rke2_vvmi0
+                to_meins        TYPE meins
+                jahrper         TYPE jahrper
+      EXPORTING converted_menge TYPE rke2_vvmi2
+                base_uom        TYPE meins
+      RAISING   zcx_mm_material_unit_conv.
+
+    METHODS get_net_weight_on_period
+      IMPORTING jahrper  TYPE jahrper
+                to_gewei TYPE gewei OPTIONAL
+      EXPORTING ntgew    TYPE float
+                gewei    TYPE mara-gewei
+      RAISING   zcx_mm_material_unit_conv.
+
+    METHODS get_net_weight_on_date
+      IMPORTING !datum   TYPE datum
+                to_gewei TYPE gewei OPTIONAL
+      EXPORTING ntgew    TYPE float
+                gewei    TYPE mara-gewei
+      RAISING   zcx_mm_material_unit_conv.
+
     METHODS get_tax_rate
       IMPORTING iv_aland TYPE aland DEFAULT c_aland_def
       EXPORTING ev_kdv   TYPE clike
@@ -316,6 +345,7 @@ CLASS zcl_mm_material DEFINITION
     DATA gt_warehouse             TYPE tt_warehouse.
     DATA gv_warehouse_read        TYPE abap_bool.
     DATA gt_tax_rates             TYPE tt_tax_rate_cache.
+    DATA go_uom_hist_set          TYPE REF TO zif_mm_mat_uom_hist_set.
 
     CLASS-DATA gt_makt       TYPE HASHED TABLE OF makt
                    WITH UNIQUE KEY primary_key COMPONENTS spras matnr.
@@ -399,9 +429,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
         IF lt_matnr_rng IS NOT INITIAL.
 
           SELECT * APPENDING CORRESPONDING FIELDS OF TABLE @gt_makt
-            FROM makt
-            WHERE spras = @iv_spras AND
-                  matnr IN @lt_matnr_rng.
+                 FROM makt
+                 WHERE spras  = @iv_spras
+                   AND matnr IN @lt_matnr_rng.
         ENDIF.
 
       CATCH cx_root INTO DATA(lo_diaper).
@@ -447,8 +477,8 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
         IF lt_matnr_rng IS NOT INITIAL.
           SELECT * APPENDING CORRESPONDING FIELDS OF TABLE @gt_mara
-            FROM mara
-            WHERE matnr IN @lt_matnr_rng.
+                 FROM mara
+                 WHERE matnr IN @lt_matnr_rng.
         ENDIF.
 
       CATCH cx_root INTO DATA(lo_diaper).
@@ -508,9 +538,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
         IF     lt_matnr_rng IS NOT INITIAL
            AND lt_werks_rng IS NOT INITIAL.
           SELECT * INTO TABLE @DATA(lt_marc)
-            FROM marc
-            WHERE matnr IN @lt_matnr_rng AND
-                  werks IN @lt_werks_rng.
+                 FROM marc
+                 WHERE matnr IN @lt_matnr_rng
+                   AND werks IN @lt_werks_rng.
         ENDIF.
 
         LOOP AT lt_marc ASSIGNING FIELD-SYMBOL(<ls_marc>).
@@ -561,9 +591,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
         IF lt_matnr_rng IS NOT INITIAL.
           SELECT * INTO TABLE @DATA(lt_marc)
-            FROM marc
-            WHERE matnr IN @lt_matnr_rng AND
-                  werks = @iv_werks.
+                 FROM marc
+                 WHERE matnr IN @lt_matnr_rng
+                   AND werks  = @iv_werks.
         ENDIF.
 
         LOOP AT lt_marc ASSIGNING FIELD-SYMBOL(<ls_marc>).
@@ -645,16 +675,14 @@ CLASS zcl_mm_material IMPLEMENTATION.
            AND lt_matnr_rng IS NOT INITIAL
            AND lt_werks_rng IS NOT INITIAL.
 
-          SELECT matnr, werks, lgort
-            FROM mard
-            WHERE
-              matnr IN @lt_matnr_rng AND
-              werks IN @lt_werks_rng AND
-              lgort IN @lt_lgort_rng AND
-              (
-                lvorm = @space OR
-                lvorm IS NULL )
-            INTO TABLE @DATA(lt_mard).
+          SELECT matnr, werks, lgort FROM mard
+                 WHERE matnr IN @lt_matnr_rng
+                   AND werks IN @lt_werks_rng
+                   AND lgort IN @lt_lgort_rng
+                   AND (
+                         lvorm = @space
+                 OR lvorm IS NULL )
+                 INTO TABLE @DATA(lt_mard).
         ENDIF.
 
         LOOP AT lt_mard ASSIGNING FIELD-SYMBOL(<ls_mard>).
@@ -710,10 +738,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
         IF lt_matnr_rng IS NOT INITIAL.
           SELECT * APPENDING CORRESPONDING FIELDS OF TABLE @gt_mlan
-            FROM mlan
-            WHERE
-              matnr IN @lt_matnr_rng AND
-              aland = @iv_aland.
+                 FROM mlan
+                 WHERE matnr IN @lt_matnr_rng
+                   AND aland  = @iv_aland.
         ENDIF.
 
       CATCH cx_root INTO DATA(lo_diaper).
@@ -760,7 +787,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
                 AND       <lv_vkorg> IS NOT INITIAL
                 AND       <lv_vtweg> IS ASSIGNED
                 AND       <lv_vtweg> IS NOT INITIAL
-                AND ( NOT line_exists( gt_mvke[ KEY primary_key COMPONENTS matnr = <lv_matnr> vkorg = <lv_vkorg> vtweg = <lv_vtweg> ] ) ).
+                AND ( NOT line_exists( gt_mvke[ KEY primary_key COMPONENTS matnr = <lv_matnr>
+                                                                           vkorg = <lv_vkorg>
+                                                                           vtweg = <lv_vtweg> ] ) ).
 
           COLLECT VALUE:
             range_s_matnr( option = zcl_bc_ddic_toolkit=>c_option_eq
@@ -785,13 +814,15 @@ CLASS zcl_mm_material IMPLEMENTATION.
            AND lt_vtweg_rng IS NOT INITIAL.
 
           SELECT * INTO TABLE @DATA(lt_mvke)
-            FROM mvke
-            WHERE matnr IN @lt_matnr_rng AND
-                  vkorg IN @lt_vkorg_rng AND
-                  vtweg IN @lt_vtweg_rng.
+                 FROM mvke
+                 WHERE matnr IN @lt_matnr_rng
+                   AND vkorg IN @lt_vkorg_rng
+                   AND vtweg IN @lt_vtweg_rng.
 
           LOOP AT lt_mvke ASSIGNING FIELD-SYMBOL(<ls_mvke>).
-            CHECK NOT line_exists( gt_mvke[ KEY primary_key COMPONENTS matnr = <ls_mvke>-matnr vkorg = <ls_mvke>-vkorg vtweg = <ls_mvke>-vtweg ] ).
+            CHECK NOT line_exists( gt_mvke[ KEY primary_key COMPONENTS matnr = <ls_mvke>-matnr
+                                                                       vkorg = <ls_mvke>-vkorg
+                                                                       vtweg = <ls_mvke>-vtweg ] ).
             INSERT <ls_mvke> INTO TABLE gt_mvke.
           ENDLOOP.
         ENDIF.
@@ -848,13 +879,15 @@ CLASS zcl_mm_material IMPLEMENTATION.
         ENDIF.
 
         SELECT * INTO TABLE @DATA(lt_mvke)
-          FROM mvke
-          WHERE matnr IN @lt_matnr_rng AND
-                vkorg = @iv_vkorg AND
-                vtweg = @iv_vtweg.
+               FROM mvke
+               WHERE matnr IN @lt_matnr_rng
+                 AND vkorg  = @iv_vkorg
+                 AND vtweg  = @iv_vtweg.
 
         LOOP AT lt_mvke ASSIGNING FIELD-SYMBOL(<ls_mvke>).
-          CHECK NOT line_exists( gt_mvke[ KEY primary_key COMPONENTS matnr = <ls_mvke>-matnr vkorg = <ls_mvke>-vkorg vtweg = <ls_mvke>-vtweg ] ).
+          CHECK NOT line_exists( gt_mvke[ KEY primary_key COMPONENTS matnr = <ls_mvke>-matnr
+                                                                     vkorg = <ls_mvke>-vkorg
+                                                                     vtweg = <ls_mvke>-vtweg ] ).
           INSERT <ls_mvke> INTO TABLE gt_mvke.
         ENDLOOP.
 
@@ -897,8 +930,8 @@ CLASS zcl_mm_material IMPLEMENTATION.
         ENDIF.
 
         SELECT * FROM mvke
-                 WHERE matnr IN @lt_matnr_rng
-                 INTO TABLE @DATA(lt_mvke).
+               WHERE matnr IN @lt_matnr_rng
+               INTO TABLE @DATA(lt_mvke).
 
         LOOP AT lt_mvke ASSIGNING FIELD-SYMBOL(<ls_mvke>).
           CHECK NOT line_exists( gt_mvke[ KEY primary_key COMPONENTS matnr = <ls_mvke>-matnr
@@ -929,9 +962,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
     CHECK ir_tab IS NOT INITIAL.
 
-    ASSERT iv_fnam_matnr IS NOT INITIAL AND
-           iv_fnam_werks IS NOT INITIAL AND
-           iv_fnam_lgort IS NOT INITIAL.
+    ASSERT     iv_fnam_matnr IS NOT INITIAL
+           AND iv_fnam_werks IS NOT INITIAL
+           AND iv_fnam_lgort IS NOT INITIAL.
 
     ASSIGN ir_tab->* TO <lt_tab>.
     IF <lt_tab> IS INITIAL.
@@ -951,9 +984,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
                         iv_fnam_werks OF STRUCTURE <ls_tab> TO FIELD-SYMBOL(<lv_werks>),
                         iv_fnam_lgort OF STRUCTURE <ls_tab> TO FIELD-SYMBOL(<lv_lgort>).
 
-      ASSERT <lv_matnr> IS ASSIGNED AND
-             <lv_werks> IS ASSIGNED AND
-             <lv_lgort> IS ASSIGNED.
+      ASSERT     <lv_matnr> IS ASSIGNED
+             AND <lv_werks> IS ASSIGNED
+             AND <lv_lgort> IS ASSIGNED.
 
       CHECK     <lv_matnr> IS NOT INITIAL
             AND <lv_werks> IS NOT INITIAL
@@ -1007,11 +1040,10 @@ CLASS zcl_mm_material IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    SELECT matnr, spras, maktx
-      FROM makt
-      FOR ALL ENTRIES IN @lt_matnr
-      WHERE matnr = @lt_matnr-table_line
-      INTO TABLE @DATA(lt_makt).
+    SELECT matnr, spras, maktx FROM makt
+           FOR ALL ENTRIES IN @lt_matnr
+           WHERE matnr = @lt_matnr-table_line
+           INTO TABLE @DATA(lt_makt).
 
     IF lt_makt IS INITIAL.
       RETURN.
@@ -1072,10 +1104,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
         ELSE gs_def-mstav ).
 
       IF lv_vmsta IS NOT INITIAL.
-        SELECT SINGLE *
-          FROM tvms
-          WHERE vmsta = @lv_vmsta
-          INTO @ls_cache-tvms.
+        SELECT SINGLE * FROM tvms
+               WHERE vmsta = @lv_vmsta
+               INTO @ls_cache-tvms.
       ENDIF.
 
       INSERT ls_cache
@@ -1117,8 +1148,8 @@ CLASS zcl_mm_material IMPLEMENTATION.
       ls_multiton-obj = NEW #( ).
 
       SELECT SINGLE * FROM mara
-             WHERE  matnr = @ls_multiton-matnr
-             INTO   @ls_multiton-obj->gs_def.
+             WHERE matnr = @ls_multiton-matnr
+             INTO @ls_multiton-obj->gs_def.
 
       IF sy-subrc <> 0.
         RAISE EXCEPTION NEW zcx_mm_material( textid = zcx_mm_material=>undefined
@@ -1139,9 +1170,10 @@ CLASS zcl_mm_material IMPLEMENTATION.
            TO FIELD-SYMBOL(<ls_makt>).
 
     IF sy-subrc <> 0.
-      SELECT SINGLE * FROM makt INTO ls_makt
-        WHERE spras = iv_spras
-          AND matnr = iv_matnr.
+      SELECT SINGLE * FROM makt
+             INTO ls_makt
+             WHERE spras = iv_spras
+               AND matnr = iv_matnr.
       ls_makt-spras = iv_spras.
       ls_makt-matnr = iv_matnr.
       INSERT ls_makt INTO TABLE gt_makt ASSIGNING <ls_makt>.
@@ -1174,9 +1206,10 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
     IF sy-subrc <> 0.
 
-      SELECT SINGLE * FROM marc INTO ls_marc
-        WHERE matnr = iv_matnr
-          AND werks = iv_werks.
+      SELECT SINGLE * FROM marc
+             INTO ls_marc
+             WHERE matnr = iv_matnr
+               AND werks = iv_werks.
 
       DATA(ls_marc_subrc) = VALUE t_marc_subrc( matnr = iv_matnr
                                                 werks = iv_werks
@@ -1201,10 +1234,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
       DATA(ls_marm) = VALUE t_marm_cache( matnr = iv_matnr ).
 
-      SELECT *
-        FROM marm
-        WHERE matnr = @ls_marm-matnr
-        INTO TABLE @ls_marm-marm.
+      SELECT * FROM marm
+             WHERE matnr = @ls_marm-matnr
+             INTO TABLE @ls_marm-marm.
 
       INSERT ls_marm
              INTO TABLE gt_marm
@@ -1223,8 +1255,10 @@ CLASS zcl_mm_material IMPLEMENTATION.
            TO FIELD-SYMBOL(<ls_mbew>).
 
     IF sy-subrc <> 0.
-      SELECT SINGLE * FROM mbew INTO ls_mbew WHERE matnr = iv_matnr AND
-                                                   bwkey = iv_bwkey. "#EC CI_NOORDER
+      SELECT SINGLE * FROM mbew
+             INTO ls_mbew
+             WHERE matnr = iv_matnr
+               AND bwkey = iv_bwkey. "#EC CI_NOORDER
       ls_mbew-matnr = iv_matnr.
       ls_mbew-bwkey = iv_bwkey.
       INSERT ls_mbew INTO TABLE gt_mbew ASSIGNING <ls_mbew>.
@@ -1242,10 +1276,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
     IF sy-subrc <> 0.
       SELECT SINGLE * FROM mlan
-        WHERE
-          matnr = @iv_matnr AND
-          aland = @iv_aland
-        INTO @ls_mlan.
+             WHERE matnr = @iv_matnr
+               AND aland = @iv_aland
+             INTO @ls_mlan.
       ls_mlan-matnr = iv_matnr.
       ls_mlan-aland = iv_aland.
       INSERT ls_mlan INTO TABLE gt_mlan ASSIGNING <ls_mlan>.
@@ -1266,9 +1299,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
       CLEAR ls_mvke.
 
       SELECT SINGLE * FROM mvke
-             WHERE matnr = @iv_matnr AND
-                   vkorg = @iv_vkorg AND
-                   vtweg = @iv_vtweg
+             WHERE matnr = @iv_matnr
+               AND vkorg = @iv_vkorg
+               AND vtweg = @iv_vtweg
              INTO @ls_mvke.
 
       IF     sy-subrc      <> 0
@@ -1311,9 +1344,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
 
         SELECT SINGLE FROM zi_sd_tr_sct_rate
                FIELDS vat_rate_txt
-               WHERE  taxm2 = @ls_mlan-taxm2 AND
-                      land1 = @iv_aland
-               INTO   @ls_new_tax_rate-otv.
+               WHERE taxm2 = @ls_mlan-taxm2
+                 AND land1 = @iv_aland
+               INTO @ls_new_tax_rate-otv.
 
         IF ls_new_tax_rate-otv = space.
           ls_new_tax_rate-otv = '0'.
@@ -1343,8 +1376,8 @@ CLASS zcl_mm_material IMPLEMENTATION.
       ENDTRY.
 
       SELECT SINGLE hrkft FROM mbew
-             WHERE matnr = @gs_def-matnr AND
-                   bwkey = @lv_bwkey
+             WHERE matnr = @gs_def-matnr
+               AND bwkey = @lv_bwkey
              INTO CORRESPONDING FIELDS OF @ls_vp.       "#EC CI_NOORDER
 
       IF sy-subrc <> 0.
@@ -1379,9 +1412,9 @@ CLASS zcl_mm_material IMPLEMENTATION.
       DATA(ls_cache) = VALUE t_batch_existence_cache( charg = iv_charg ).
 
       SELECT SINGLE mandt FROM mch1
-             WHERE matnr = @gs_def-matnr AND
-                   charg = @ls_cache-charg AND
-                   lvorm = @abap_false
+             WHERE matnr = @gs_def-matnr
+               AND charg = @ls_cache-charg
+               AND lvorm = @abap_false
              INTO @sy-mandt ##WRITE_OK.
 
       IF sy-subrc <> 0.
@@ -1520,13 +1553,75 @@ CLASS zcl_mm_material IMPLEMENTATION.
                                quantity = quantity ).
   ENDMETHOD.
 
+  METHOD conv_quan_to_base_uom_on_per.
+    CLEAR: converted_menge,
+           converted_meins.
+
+    IF go_uom_hist_set IS INITIAL.
+      go_uom_hist_set = CAST #( NEW zcl_mm_mat_uom_hist_set( VALUE #( ( gs_def-matnr ) ) ) ).
+    ENDIF.
+
+    go_uom_hist_set->convert_to_base_uom_on_period( EXPORTING matnr           = gs_def-matnr
+                                                              from_menge      = from_menge
+                                                              from_meins      = from_meins
+                                                              jahrper         = jahrper
+                                                    IMPORTING converted_menge = converted_menge
+                                                              converted_meins = converted_meins ).
+  ENDMETHOD.
+
+  METHOD conv_quan_fr_base_uom_on_per.
+    CLEAR: converted_menge,
+           base_uom.
+
+    IF go_uom_hist_set IS INITIAL.
+      go_uom_hist_set = CAST #( NEW zcl_mm_mat_uom_hist_set( VALUE #( ( gs_def-matnr ) ) ) ).
+    ENDIF.
+
+    go_uom_hist_set->convert_fr_base_uom_on_period( EXPORTING matnr           = gs_def-matnr
+                                                              from_menge      = from_menge
+                                                              to_meins        = to_meins
+                                                              jahrper         = jahrper
+                                                    IMPORTING converted_menge = converted_menge
+                                                              base_uom        = base_uom ).
+  ENDMETHOD.
+
+  METHOD get_net_weight_on_period.
+    CLEAR: ntgew,
+           gewei.
+
+    IF go_uom_hist_set IS INITIAL.
+      go_uom_hist_set = CAST #( NEW zcl_mm_mat_uom_hist_set( VALUE #( ( gs_def-matnr ) ) ) ).
+    ENDIF.
+
+    go_uom_hist_set->get_net_weight_on_period( EXPORTING matnr    = gs_def-matnr
+                                                         jahrper  = jahrper
+                                                         to_gewei = to_gewei
+                                               IMPORTING ntgew    = ntgew
+                                                         gewei    = gewei ).
+  ENDMETHOD.
+
+  METHOD get_net_weight_on_date.
+    CLEAR: ntgew,
+           gewei.
+
+    IF go_uom_hist_set IS INITIAL.
+      go_uom_hist_set = CAST #( NEW zcl_mm_mat_uom_hist_set( VALUE #( ( gs_def-matnr ) ) ) ).
+    ENDIF.
+
+    go_uom_hist_set->get_net_weight_on_date( EXPORTING matnr    = gs_def-matnr
+                                                       datum    = datum
+                                                       to_gewei = to_gewei
+                                             IMPORTING ntgew    = ntgew
+                                                       gewei    = gewei ).
+  ENDMETHOD.
+
   METHOD read_warehouse_lazy.
     CHECK gv_warehouse_read = abap_false.
 
     SELECT lgnum, lgbkz, ltkze, ltkza
            FROM mlgn
-           WHERE matnr = @gs_def-matnr AND
-                 lvorm = @abap_false
+           WHERE matnr = @gs_def-matnr
+             AND lvorm = @abap_false
            INTO CORRESPONDING FIELDS OF TABLE @gt_warehouse.
 
     gv_warehouse_read = abap_true.

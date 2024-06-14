@@ -1,6 +1,5 @@
 CLASS zcl_sd_sales_order DEFINITION
-  PUBLIC
-  FINAL
+  PUBLIC FINAL
   CREATE PRIVATE.
 
   PUBLIC SECTION.
@@ -166,8 +165,7 @@ CLASS zcl_sd_sales_order DEFINITION
         cx    TYPE REF TO zcx_sd_order,
       END OF t_multiton,
 
-      tt_multiton
-        TYPE HASHED TABLE OF t_multiton
+      tt_multiton TYPE HASHED TABLE OF t_multiton
         WITH UNIQUE KEY primary_key COMPONENTS vbeln,
 
       BEGIN OF t_vbap,
@@ -179,16 +177,12 @@ CLASS zcl_sd_sales_order DEFINITION
         matnr TYPE vbap-matnr,
       END OF t_vbap,
 
-      tt_vbap
-        TYPE STANDARD TABLE OF t_vbap
-        WITH DEFAULT KEY,
+      tt_vbap         TYPE STANDARD TABLE OF t_vbap WITH DEFAULT KEY,
 
-      tt_partner
-        TYPE HASHED TABLE OF t_partner
+      tt_partner      TYPE HASHED TABLE OF t_partner
         WITH UNIQUE KEY primary_key COMPONENTS parvw,
 
-      tt_item_partner
-        TYPE HASHED TABLE OF t_item_partner
+      tt_item_partner TYPE HASHED TABLE OF t_item_partner
         WITH UNIQUE KEY primary_key COMPONENTS posnr parvw,
 
       BEGIN OF t_lazy_flg,
@@ -309,16 +303,14 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
 
   METHOD get_deliveries.
     IF gs_lazy-flg-dlv IS INITIAL.
-      SELECT
-          vbelv AS vbeln_va,
-          posnv AS posnr_va,
-          vbeln AS vbeln_vl,
-          posnn AS posnr_vl
-        FROM vbfa
-        WHERE
-          vbelv   = @gv_vbeln AND
-          vbtyp_n = @c_vbtyp-dlv
-        INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-dlv.
+      SELECT vbelv AS vbeln_va,
+             posnv AS posnr_va,
+             vbeln AS vbeln_vl,
+             posnn AS posnr_vl
+             FROM vbfa
+             WHERE vbelv   = @gv_vbeln
+               AND vbtyp_n = @c_vbtyp-dlv
+             INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-dlv.
 
       gs_lazy-flg-dlv = abap_true.
     ENDIF.
@@ -383,23 +375,16 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
 
       IF lt_dlv IS NOT INITIAL.
 
-        SELECT
-            vbfa~vbelv,
-            vbfa~posnv,
-            vbfa~vbeln,
-            vbfa~posnn,
-            vbrk~fkart,
-            vbrk~kunrg
-          FROM
-            vbfa
-            INNER JOIN vbrk ON vbrk~vbeln = vbfa~vbeln
-          FOR ALL ENTRIES IN @lt_dlv
-          WHERE
-            vbelv   = @lt_dlv-vbeln_vl AND
-            posnv   = @lt_dlv-posnr_vl AND
-            vbtyp_n = @c_vbtyp-inv     AND
-            draft   = @space
-          INTO TABLE @DATA(lt_vbfa).   "#EC CI_DB_OPERATION_OK[2768887]
+        SELECT vbfa~vbelv, vbfa~posnv, vbfa~vbeln, vbfa~posnn, vbrk~fkart, vbrk~kunrg
+               FROM vbfa
+                    INNER JOIN vbrk
+                      ON vbrk~vbeln = vbfa~vbeln
+               FOR ALL ENTRIES IN @lt_dlv
+               WHERE vbelv   = @lt_dlv-vbeln_vl
+                 AND posnv   = @lt_dlv-posnr_vl
+                 AND vbtyp_n = @c_vbtyp-inv
+                 AND draft   = @space
+               INTO TABLE @DATA(lt_vbfa).   "#EC CI_DB_OPERATION_OK[2768887]
 
         LOOP AT lt_dlv ASSIGNING FIELD-SYMBOL(<ls_dlv>).
 
@@ -431,30 +416,22 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD validate_carrier.
-    SELECT SINGLE zsdt_ckkrg_c01~kunnr                  "#EC CI_NOORDER
-           FROM vbak
-                INNER JOIN zsdt_ckkrg_c01 ON zsdt_ckkrg_c01~kunnr = vbak~kunnr
-           WHERE vbak~vbeln           = @me->gv_vbeln AND
-                 zsdt_ckkrg_c01~krule = @me->carrier_rule-tanimli
-           INTO @DATA(c01_kunnr).
+    DATA c01_kunnr TYPE kunnr.
 
-    IF sy-subrc <> 0.
-      RETURN.
+    DATA(ckkrg_customers) = CAST zif_sd_ckkrg_customer_set( zcl_sd_ckkrg_all_customers=>get_instance( ) ).
+
+    CHECK ckkrg_customers->order_customer_has_rule( EXPORTING vbeln = me->gv_vbeln
+                                                              krule = me->carrier_rule-tanimli
+                                                    IMPORTING kunnr = c01_kunnr ).
+
+    IF NOT ckkrg_customers->customer_has_any_carrier( c01_kunnr ).
+      RAISE EXCEPTION NEW zcx_sd_order( textid = zcx_sd_order=>missing_carrier_cust ).
     ENDIF.
 
-    SELECT lifnr FROM zsdt_ckkrg_c02
-           WHERE kunnr = @c01_kunnr
-           INTO TABLE @DATA(c02_lifnr).
-
-    CASE sy-subrc.
-      WHEN 0.
-        IF NOT line_exists( c02_lifnr[ table_line = carrier ] ).
-          RAISE EXCEPTION NEW zcx_sd_order( textid = zcx_sd_order=>invalid_carrier_code ).
-        ENDIF.
-
-      WHEN OTHERS.
-        RAISE EXCEPTION NEW zcx_sd_order( textid = zcx_sd_order=>missing_carrier_cust ).
-    ENDCASE.
+    IF NOT ckkrg_customers->customer_has_carrier( kunnr = c01_kunnr
+                                                  lifnr = carrier ).
+      RAISE EXCEPTION NEW zcx_sd_order( textid = zcx_sd_order=>invalid_carrier_code ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD wait_until_order_item_created.
@@ -462,8 +439,8 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
 
     DO c_max_wait TIMES.
       SELECT SINGLE mandt FROM vbap
-             WHERE vbeln = @iv_vbeln AND
-                   posnr = @iv_posnr
+             WHERE vbeln = @iv_vbeln
+               AND posnr = @iv_posnr
              INTO @sy-mandt ##WRITE_OK.
 
       IF sy-subrc = 0.
@@ -534,12 +511,15 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     IF lt_readable_mats IS NOT INITIAL.
       DATA(lv_start_of_month) = CONV erdat( |{ sy-datum+0(6) }01| ).
 
-      SELECT FROM   vbak
-                    INNER JOIN vbap ON vbap~vbeln = vbak~vbeln
-                    INNER JOIN @lt_readable_mats AS _mat ON _mat~table_line = vbap~matnr
-             FIELDS DISTINCT vbap~matnr, @abap_true AS existence
-             WHERE  vbak~erdat >= @lv_start_of_month AND
-                    vbak~erdat <= @sy-datum
+      SELECT FROM vbak
+                  INNER JOIN vbap
+                    ON vbap~vbeln = vbak~vbeln
+                  INNER JOIN @lt_readable_mats AS _mat
+                    ON _mat~table_line = vbap~matnr
+             FIELDS DISTINCT vbap~matnr,
+                             @abap_true AS existence
+             WHERE vbak~erdat >= @lv_start_of_month
+               AND vbak~erdat <= @sy-datum
              APPENDING CORRESPONDING FIELDS OF TABLE @gt_cur_mon_mat_exist_cache.
     ENDIF.
 
@@ -631,13 +611,11 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
       DATA(lt_inv) = get_invoices( ).
 
       IF lt_inv IS NOT INITIAL.
-        SELECT mandt
-          FROM zsdt_fat_ayristi
-          FOR ALL ENTRIES IN @lt_inv
-          WHERE
-            fkart = @lt_inv-fkart AND
-            kunnr = @lt_inv-kunrg
-          INTO TABLE @DATA(lt_dummy).
+        SELECT mandt FROM zsdt_fat_ayristi
+               FOR ALL ENTRIES IN @lt_inv
+               WHERE fkart = @lt_inv-fkart
+                 AND kunnr = @lt_inv-kunrg
+               INTO TABLE @DATA(lt_dummy).
 
         gs_lazy-val-sfa = xsdbool( lt_dummy IS NOT INITIAL ).
       ENDIF.
@@ -651,8 +629,8 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
   METHOD get_header_business_data.
     IF me->gs_lazy-flg-header_vbkd IS INITIAL.
       SELECT SINGLE * FROM vbkd
-             WHERE vbeln = @me->gv_vbeln AND
-                   posnr = '000000'
+             WHERE vbeln = @me->gv_vbeln
+               AND posnr = '000000'
              INTO CORRESPONDING FIELDS OF
              @me->gs_lazy-val-header_vbkd.
 
@@ -683,18 +661,15 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
 
     CHECK gs_lazy-flg-partners = abap_false.
 
-    SELECT DISTINCT
-        vbpa~kunnr, vbpa~parvw, vbpa~adrnr,
-        adrc~name1, adrc~name2, adrc~name3, adrc~name4
-      FROM
-        vbpa
-        INNER JOIN adrc ON adrc~addrnumber = vbpa~adrnr
-      WHERE
-        vbpa~vbeln     =  @gv_vbeln         AND
-        vbpa~posnr     =  @lv_posnr_initial AND
-        adrc~date_from <= @sy-datum         AND
-        adrc~date_to   >= @sy-datum
-      INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-partners.
+    SELECT DISTINCT vbpa~kunnr, vbpa~parvw, vbpa~adrnr, adrc~name1, adrc~name2, adrc~name3, adrc~name4
+           FROM vbpa
+                INNER JOIN adrc
+                  ON adrc~addrnumber = vbpa~adrnr
+           WHERE vbpa~vbeln      = @gv_vbeln
+             AND vbpa~posnr      = @lv_posnr_initial
+             AND adrc~date_from <= @sy-datum
+             AND adrc~date_to   >= @sy-datum
+           INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-partners.
 
     gs_lazy-flg-partners = abap_true.
   ENDMETHOD.
@@ -703,9 +678,9 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     CHECK gs_lazy-flg-vbak = abap_false.
 
     SELECT SINGLE vkorg, vtweg, spart, kunnr, faksk, waerk
-      INTO CORRESPONDING FIELDS OF @gs_lazy-val-vbak
-      FROM vbak
-      WHERE vbeln = @gv_vbeln.
+           INTO CORRESPONDING FIELDS OF @gs_lazy-val-vbak
+           FROM vbak
+           WHERE vbeln = @gv_vbeln.
 
     ASSERT sy-subrc = 0.
     gs_lazy-flg-vbak = abap_true.
@@ -715,9 +690,9 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     CHECK gs_lazy-flg-vbap = abap_false.
 
     SELECT posnr, abgru, ktgrm, uepos, upmat, matnr
-      FROM vbap
-      WHERE vbeln = @gv_vbeln
-      INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-vbap.
+           FROM vbap
+           WHERE vbeln = @gv_vbeln
+           INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-vbap.
 
     ASSERT sy-subrc = 0.
 
@@ -748,8 +723,8 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
 
     SELECT DISTINCT vbpa~posnr, vbpa~parvw, vbpa~kunnr
            FROM vbpa
-           WHERE vbpa~vbeln =  @gv_vbeln AND
-                 vbpa~posnr <> @empty_posnr
+           WHERE vbpa~vbeln  = @gv_vbeln
+             AND vbpa~posnr <> @empty_posnr
            INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-item_partners.
 
     gs_lazy-flg-item_partners = abap_true.

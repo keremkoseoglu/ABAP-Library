@@ -5,12 +5,14 @@ CLASS zcl_sd_sales_order DEFINITION
   PUBLIC SECTION.
     TYPES:
       BEGIN OF t_vbak,
-        vkorg TYPE vbak-vkorg,
-        vtweg TYPE vbak-vtweg,
-        spart TYPE vbak-spart,
-        kunnr TYPE vbak-kunnr,
-        faksk TYPE vbak-faksk,
-        waerk TYPE vbak-waerk,
+        vkorg    TYPE vbak-vkorg,
+        vtweg    TYPE vbak-vtweg,
+        spart    TYPE vbak-spart,
+        kunnr    TYPE vbak-kunnr,
+        faksk    TYPE vbak-faksk,
+        waerk    TYPE vbak-waerk,
+        kvgr2    TYPE vbak-kvgr2,
+        bukrs_vf TYPE vbak-bukrs_vf,
       END OF t_vbak.
     TYPES:
       BEGIN OF t_ord_dlv_map,
@@ -70,6 +72,8 @@ CLASS zcl_sd_sales_order DEFINITION
                  sold_to TYPE parvw VALUE 'AG',
                END OF c_parvw.
 
+    CONSTANTS c_default_max_wait TYPE i VALUE 60.
+
     CLASS-METHODS get_instance
       IMPORTING iv_vbeln         TYPE vbeln_va
                 iv_wait          TYPE i         OPTIONAL
@@ -86,7 +90,8 @@ CLASS zcl_sd_sales_order DEFINITION
       RAISING   zcx_sd_zm_material.
 
     CLASS-METHODS wait_until_order_created
-      IMPORTING iv_vbeln TYPE vbeln_va
+      IMPORTING iv_vbeln    TYPE vbeln_va
+                iv_max_wait TYPE i DEFAULT c_default_max_wait
       RAISING   zcx_sd_order.
 
     CLASS-METHODS wait_until_order_item_created
@@ -95,7 +100,8 @@ CLASS zcl_sd_sales_order DEFINITION
       RAISING   zcx_sd_order.
 
     CLASS-METHODS wait_until_order_lockable
-      IMPORTING iv_vbeln TYPE vbeln_va
+      IMPORTING iv_vbeln    TYPE vbeln_va
+                iv_max_wait TYPE i DEFAULT c_default_max_wait
       RAISING   zcx_bc_lock.
 
     CLASS-METHODS exists_in_curr_month_for_mat
@@ -149,10 +155,6 @@ CLASS zcl_sd_sales_order DEFINITION
 
     METHODS is_scope_fat_ayristi
       RETURNING VALUE(rv_tek) TYPE abap_bool.
-
-    METHODS validate_carrier
-      IMPORTING carrier TYPE zsdd_kargoid
-      RAISING   zcx_sd_order.
 
     METHODS get_header_business_data
       RETURNING VALUE(result) TYPE t_vbkd.
@@ -246,14 +248,7 @@ CLASS zcl_sd_sales_order DEFINITION
                BEGIN OF c_vbtyp,
                  dlv TYPE vbtypl VALUE 'J',
                  inv TYPE vbtypl VALUE 'M',
-               END OF c_vbtyp,
-
-               c_max_wait TYPE i VALUE 60.
-
-    CONSTANTS : BEGIN OF carrier_rule,
-                  serbest TYPE zsdd_krgrule VALUE 'SERBEST',
-                  tanimli TYPE zsdd_krgrule VALUE 'TANIMLI',
-                END OF carrier_rule.
+               END OF c_vbtyp.
 
     CLASS-DATA: gt_material_procedure_cache TYPE tt_material_procedure_cache,
                 gt_multiton                 TYPE tt_multiton,
@@ -415,29 +410,10 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     rt_map = gs_lazy-val-inv.
   ENDMETHOD.
 
-  METHOD validate_carrier.
-    DATA c01_kunnr TYPE kunnr.
-
-    DATA(ckkrg_customers) = CAST zif_sd_ckkrg_customer_set( zcl_sd_ckkrg_all_customers=>get_instance( ) ).
-
-    CHECK ckkrg_customers->order_customer_has_rule( EXPORTING vbeln = me->gv_vbeln
-                                                              krule = me->carrier_rule-tanimli
-                                                    IMPORTING kunnr = c01_kunnr ).
-
-    IF NOT ckkrg_customers->customer_has_any_carrier( c01_kunnr ).
-      RAISE EXCEPTION NEW zcx_sd_order( textid = zcx_sd_order=>missing_carrier_cust ).
-    ENDIF.
-
-    IF NOT ckkrg_customers->customer_has_carrier( kunnr = c01_kunnr
-                                                  lifnr = carrier ).
-      RAISE EXCEPTION NEW zcx_sd_order( textid = zcx_sd_order=>invalid_carrier_code ).
-    ENDIF.
-  ENDMETHOD.
-
   METHOD wait_until_order_item_created.
     wait_until_order_created( iv_vbeln ).
 
-    DO c_max_wait TIMES.
+    DO c_default_max_wait TIMES.
       SELECT SINGLE mandt FROM vbap
              WHERE vbeln = @iv_vbeln
                AND posnr = @iv_posnr
@@ -456,7 +432,7 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD wait_until_order_lockable.
-    DO c_max_wait TIMES.
+    DO iv_max_wait TIMES.
       CALL FUNCTION 'ENQUEUE_EVVBAKE'
         EXPORTING  vbeln          = iv_vbeln
         EXCEPTIONS foreign_lock   = 1
@@ -465,7 +441,7 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
 
       CASE sy-subrc.
         WHEN 0.
-          CALL FUNCTION 'DEQUEUE_EVVBLKE'
+          CALL FUNCTION 'DEQUEUE_EVVBAKE'
             EXPORTING vbeln = iv_vbeln.
 
           RETURN.
@@ -511,6 +487,7 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
     IF lt_readable_mats IS NOT INITIAL.
       DATA(lv_start_of_month) = CONV erdat( |{ sy-datum+0(6) }01| ).
 
+      ##ITAB_KEY_IN_SELECT
       SELECT FROM vbak
                   INNER JOIN vbap
                     ON vbap~vbeln = vbak~vbeln
@@ -677,7 +654,7 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
   METHOD read_vbak_lazy.
     CHECK gs_lazy-flg-vbak = abap_false.
 
-    SELECT SINGLE vkorg, vtweg, spart, kunnr, faksk, waerk
+    SELECT SINGLE vkorg, vtweg, spart, kunnr, faksk, waerk, kvgr2, bukrs_vf
            INTO CORRESPONDING FIELDS OF @gs_lazy-val-vbak
            FROM vbak
            WHERE vbeln = @gv_vbeln.
@@ -700,7 +677,7 @@ CLASS zcl_sd_sales_order IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD wait_until_order_created.
-    DO c_max_wait TIMES.
+    DO iv_max_wait TIMES.
       SELECT SINGLE mandt FROM vbak
              WHERE vbeln = @iv_vbeln
              INTO @sy-mandt ##WRITE_OK.

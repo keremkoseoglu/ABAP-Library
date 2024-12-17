@@ -207,11 +207,10 @@ CLASS zcl_bc_transport_request DEFINITION
       IMPORTING it_user TYPE tt_user.
 
     METHODS delete
-      RAISING zcx_bc_function_subrc.
+      RAISING ycx_addict_trans_req_delete.
 
     METHODS delete_empty_subtasks
-      RAISING zcx_bc_function_subrc
-              zcx_bc_table_content.
+      RAISING ycx_addict_trans_req_delete.
 
     METHODS delete_object
       IMPORTING is_obj TYPE t_request_object_tag
@@ -279,8 +278,7 @@ CLASS zcl_bc_transport_request DEFINITION
                 iv_max_rel_wait        TYPE i         DEFAULT c_max_wait
                 iv_compl_sh_piece_list TYPE abap_bool DEFAULT abap_true
       EXPORTING ev_rel_wait_success    TYPE abap_bool
-      RAISING   zcx_bc_function_subrc
-                zcx_bc_table_content.
+      RAISING   ycx_addict_trans_req_release.
 
     METHODS sort_and_compress RAISING zcx_bc_tr_sort_and_compress.
 
@@ -389,11 +387,7 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD delete.
-    TRY.
-        me->core->delete( ).
-      CATCH ycx_addict_function_subrc INTO DATA(function_error).
-        zcx_bc_function_subrc=>raise_from_addict( function_error ).
-    ENDTRY.
+    me->core->delete( ).
   ENDMETHOD.
 
   METHOD get_request_and_objects.
@@ -560,13 +554,7 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD delete_empty_subtasks.
-    TRY.
-        me->core->delete_empty_subtasks( ).
-      CATCH ycx_addict_function_subrc INTO DATA(function_error).
-        zcx_bc_function_subrc=>raise_from_addict( function_error ).
-      CATCH ycx_addict_table_content INTO DATA(table_error).
-        zcx_bc_table_content=>raise_from_addict( table_error ).
-    ENDTRY.
+    me->core->delete_empty_subtasks( ).
   ENDMETHOD.
 
   METHOD delete_object.
@@ -582,19 +570,12 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD release.
-    TRY.
-        me->core->release( EXPORTING rel_subtasks_too    = iv_rel_subtasks_too
-                                     del_empty_subtasks  = iv_del_empty_subtasks
-                                     wait_until_released = iv_wait_until_released
-                                     max_rel_wait        = iv_max_rel_wait
-                                     compl_sh_piece_list = iv_compl_sh_piece_list
-                           IMPORTING rel_wait_success    = ev_rel_wait_success ).
-
-      CATCH ycx_addict_function_subrc INTO DATA(function_error).
-        zcx_bc_function_subrc=>raise_from_addict( function_error ).
-      CATCH ycx_addict_table_content INTO DATA(table_error).
-        zcx_bc_table_content=>raise_from_addict( table_error ).
-    ENDTRY.
+    me->core->release( EXPORTING rel_subtasks_too    = iv_rel_subtasks_too
+                                 del_empty_subtasks  = iv_del_empty_subtasks
+                                 wait_until_released = iv_wait_until_released
+                                 max_rel_wait        = iv_max_rel_wait
+                                 compl_sh_piece_list = iv_compl_sh_piece_list
+                       IMPORTING rel_wait_success    = ev_rel_wait_success ).
   ENDMETHOD.
 
   METHOD get_instance_from_addict.

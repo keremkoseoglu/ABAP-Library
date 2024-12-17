@@ -1,6 +1,5 @@
 CLASS zcl_bc_date DEFINITION
-  PUBLIC
-  FINAL
+  PUBLIC FINAL
   CREATE PRIVATE.
 
   PUBLIC SECTION.
@@ -15,7 +14,9 @@ CLASS zcl_bc_date DEFINITION
       IMPORTING !date         TYPE dats
       RETURNING VALUE(result) TYPE REF TO zcl_bc_date.
 
-    METHODS get_month_end RETURNING VALUE(result) TYPE sydatum.
+    METHODS get_month_end           RETURNING VALUE(result) TYPE sydatum.
+
+    METHODS get_prev_month_last_day RETURNING VALUE(result) TYPE sydatum.
 
   PRIVATE SECTION.
     TYPES: BEGIN OF multiton_dict,
@@ -28,7 +29,8 @@ CLASS zcl_bc_date DEFINITION
 
     CLASS-DATA multitons TYPE multiton_set.
 
-    DATA month_end TYPE sydatum.
+    DATA: month_end           TYPE sydatum,
+          prev_month_last_day TYPE sydatum.
 
     METHODS constructor IMPORTING !date TYPE dats.
 ENDCLASS.
@@ -53,6 +55,16 @@ CLASS zcl_bc_date IMPLEMENTATION.
     ENDIF.
 
     result = me->month_end.
+  ENDMETHOD.
+
+  METHOD get_prev_month_last_day.
+    IF me->prev_month_last_day IS INITIAL.
+      me->prev_month_last_day       = me->date.
+      me->prev_month_last_day+6(2)  = '01'.
+      me->prev_month_last_day      -= 1.
+    ENDIF.
+
+    result = me->prev_month_last_day.
   ENDMETHOD.
 
   METHOD constructor.

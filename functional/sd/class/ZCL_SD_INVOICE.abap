@@ -1,6 +1,5 @@
 CLASS zcl_sd_invoice DEFINITION
-  PUBLIC
-  FINAL
+  PUBLIC FINAL
   CREATE PRIVATE.
 
   PUBLIC SECTION.
@@ -11,7 +10,7 @@ CLASS zcl_sd_invoice DEFINITION
            END OF t_bkpf_key,
 
            tt_bkpf_key TYPE STANDARD TABLE OF t_bkpf_key WITH DEFAULT KEY,
-           tt_vbeln    TYPE STANDARD TABLE OF vbeln_vf   WITH DEFAULT KEY,
+           tt_vbeln    TYPE STANDARD TABLE OF vbeln_vf WITH DEFAULT KEY,
 
            BEGIN OF t_header,
              vbeln TYPE vbrk-vbeln,
@@ -71,8 +70,20 @@ CLASS zcl_sd_invoice DEFINITION
                  ship_to TYPE parvw VALUE 'WE',
                END OF c_parvw.
 
+    CONSTANTS default_max_wait TYPE i VALUE 60.
+
     DATA gv_vbeln  TYPE vbeln_vf READ-ONLY.
     DATA gs_header TYPE t_header READ-ONLY.
+
+    CLASS-METHODS wait_until_invoice_created
+      IMPORTING iv_vbeln TYPE vbeln_vf
+                max_wait TYPE i DEFAULT default_max_wait
+      RAISING   zcx_sd_invoice.
+
+    CLASS-METHODS wait_until_invoice_lockable
+      IMPORTING iv_vbeln    TYPE vbeln_vf
+                iv_max_wait TYPE i DEFAULT default_max_wait
+      RAISING   zcx_bc_lock.
 
     CLASS-METHODS get_instance
       IMPORTING iv_vbeln         TYPE vbeln_vf
@@ -105,8 +116,7 @@ CLASS zcl_sd_invoice DEFINITION
         cx    TYPE REF TO zcx_bc_table_content,
       END OF t_multiton,
 
-      tt_multiton
-        TYPE HASHED TABLE OF t_multiton
+      tt_multiton TYPE HASHED TABLE OF t_multiton
         WITH UNIQUE KEY primary_key COMPONENTS vbeln,
 
       BEGIN OF t_lazy_flg,
@@ -176,7 +186,7 @@ CLASS zcl_sd_invoice IMPLEMENTATION.
       SELECT knumv, kposn, stunr, zaehk, kschl, kbetr, waers "#EC CI_NOORDER
 *S4Hana conversion begin change by busra.acikmese@detaysoft.com 21 Nis 2022 15:44:02 {
 *        from konv
-          FROM prcd_elements
+             FROM prcd_elements
 *S4Hana conversion end change by busra.acikmese@detaysoft.com 21 Nis 2022 15:44:02 }
              WHERE knumv = @gs_header-knumv
              INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-conditions.
@@ -302,16 +312,56 @@ CLASS zcl_sd_invoice IMPLEMENTATION.
     IF gs_lazy-flg-fi_docs = abap_false.
       DATA(lv_awkey) = CONV bkpf-awkey( gv_vbeln ).
 
-      SELECT bukrs, belnr, gjahr
-             FROM bkpf
-             WHERE awtyp = @me->awtyp AND
-                   awkey = @lv_awkey
+      SELECT bukrs, belnr, gjahr FROM bkpf
+             WHERE awtyp = @me->awtyp
+               AND awkey = @lv_awkey
              INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-fi_docs.
 
       gs_lazy-flg-fi_docs = abap_true.
     ENDIF.
 
     rt_key = gs_lazy-val-fi_docs.
+  ENDMETHOD.
+
+  METHOD wait_until_invoice_created.
+    DO max_wait TIMES.
+      SELECT SINGLE mandt FROM vbrk
+             WHERE vbeln = @iv_vbeln
+             INTO @sy-mandt ##WRITE_OK.
+
+      IF sy-subrc = 0.
+        RETURN.
+      ENDIF.
+
+      WAIT UP TO 1 SECONDS.
+    ENDDO.
+
+    RAISE EXCEPTION NEW zcx_sd_invoice( textid   = zcx_sd_invoice=>invoice_not_found
+                                        vbeln_vf = iv_vbeln ).
+  ENDMETHOD.
+
+  METHOD wait_until_invoice_lockable.
+    DO iv_max_wait TIMES.
+      CALL FUNCTION 'ENQUEUE_EVVBRKE'
+        EXPORTING  vbeln          = iv_vbeln
+        EXCEPTIONS foreign_lock   = 1
+                   system_failure = 2
+                   OTHERS         = 3.
+
+      CASE sy-subrc.
+        WHEN 0.
+          CALL FUNCTION 'DEQUEUE_EVVBRKE'
+            EXPORTING vbeln = iv_vbeln.
+
+          RETURN.
+        WHEN OTHERS.
+          WAIT UP TO 1 SECONDS.
+      ENDCASE.
+    ENDDO.
+
+    RAISE EXCEPTION NEW zcx_bc_lock( textid   = zcx_bc_lock=>locked_for_too_long
+                                     bname    = CONV #( sy-msgv1 )
+                                     objectid = CONV #( iv_vbeln ) ).
   ENDMETHOD.
 
   METHOD get_instance.
@@ -345,8 +395,8 @@ CLASS zcl_sd_invoice IMPLEMENTATION.
     IF gs_lazy-flg-partners = abap_false.
       SELECT DISTINCT parvw, kunnr, adrnr
              FROM vbpa
-             WHERE vbeln = @gv_vbeln AND
-                   posnr = @me->initial_posnr
+             WHERE vbeln = @gv_vbeln
+               AND posnr = @me->initial_posnr
              INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-partners.
     ENDIF.
 

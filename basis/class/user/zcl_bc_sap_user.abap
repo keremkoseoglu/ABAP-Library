@@ -25,8 +25,10 @@ CLASS zcl_bc_sap_user DEFINITION
 
     TYPES full_name TYPE char70.
 
-    CONSTANTS: c_actvt_change  TYPE activ_auth VALUE '02',
-               c_actvt_display TYPE activ_auth VALUE '03'.
+    CONSTANTS: c_actvt_change  TYPE activ_auth  VALUE '02',
+               c_actvt_display TYPE activ_auth  VALUE '03',
+               c_parid_sicil   TYPE usr05-parid VALUE 'ZSICIL',
+               c_ustyp_dialog  TYPE usr02-ustyp VALUE 'A'.
 
     DATA gv_bname TYPE xubname READ-ONLY.
 
@@ -46,6 +48,14 @@ CLASS zcl_bc_sap_user DEFINITION
 
     CLASS-METHODS get_instance_via_email
       IMPORTING iv_email             TYPE ad_smtpadr
+                iv_tolerate_inactive TYPE abap_bool DEFAULT abap_false
+      RETURNING VALUE(ro_obj)        TYPE REF TO zcl_bc_sap_user
+      RAISING   zcx_bc_table_content
+                zcx_bc_user_master_data.
+
+    CLASS-METHODS get_instance_via_param_val
+      IMPORTING iv_parid             TYPE usr05-parid
+                iv_parva             TYPE usr05-parva
                 iv_tolerate_inactive TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(ro_obj)        TYPE REF TO zcl_bc_sap_user
       RAISING   zcx_bc_table_content
@@ -72,6 +82,8 @@ CLASS zcl_bc_sap_user DEFINITION
     METHODS get_email     RETURNING VALUE(rv_email) TYPE ad_smtpadr.
 
     METHODS get_full_name RETURNING VALUE(rv_name)  TYPE full_name.
+
+    METHODS get_language  RETURNING VALUE(rv_langu) TYPE sylangu.
 
     METHODS get_mobile_number
       IMPORTING iv_tolerate_missing_number TYPE abap_bool DEFAULT abap_true
@@ -111,6 +123,7 @@ CLASS zcl_bc_sap_user DEFINITION
              pwdchgdate  TYPE abap_bool,
              uname_text  TYPE abap_bool,
              work_center TYPE abap_bool,
+             language    TYPE abap_bool,
            END OF t_lazy_flag,
 
            BEGIN OF t_lazy_var,
@@ -120,6 +133,7 @@ CLASS zcl_bc_sap_user DEFINITION
              pwdchgdate  TYPE xubcdat,
              uname_text  TYPE name_text,
              work_center TYPE object_person_assignment,
+             language    TYPE sylangu,
            END OF t_lazy_var.
 
     TYPES: BEGIN OF t_multiton,
@@ -150,8 +164,6 @@ CLASS zcl_bc_sap_user DEFINITION
     CONSTANTS: BEGIN OF c_table,
                  adr6 TYPE tabname VALUE 'ADR6',
                END OF c_table.
-
-    CONSTANTS c_ustyp_dialog TYPE usr02-ustyp VALUE 'A' ##NO_TEXT.
 
     CLASS-DATA gs_clazy_flag TYPE t_clazy_flag.
     CLASS-DATA gs_clazy_var  TYPE t_clazy_var.
@@ -349,6 +361,20 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
     rv_name = gs_lazy_var-full_name.
   ENDMETHOD.
 
+  METHOD get_language.
+    IF gs_lazy_flag-language = abap_false.
+
+      SELECT SINGLE langu INTO @gs_lazy_var-language
+             FROM adrp
+             WHERE persnumber = ( SELECT persnumber FROM usr21 WHERE bname = @gv_bname )
+        ##WARN_OK.                                      "#EC CI_NOORDER
+
+      gs_lazy_flag-language = abap_true.
+    ENDIF.
+
+    rv_langu = gs_lazy_var-language.
+  ENDMETHOD.
+
   METHOD get_full_name_wo_error.
     TRY.
         rv_name = get_instance( iv_bname )->get_full_name( ).
@@ -420,6 +446,45 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
         RAISE EXCEPTION NEW zcx_bc_table_content( textid   = zcx_bc_table_content=>multiple_entries_for_key
                                                   objectid = CONV #( iv_email )
                                                   tabname  = c_table-adr6 ).
+    ENDCASE.
+  ENDMETHOD.
+
+  METHOD get_instance_via_param_val.
+    DATA(parva_rng) = COND zbctt_xuvalue_rng(
+                        WHEN iv_parva IS INITIAL
+                        THEN VALUE #( ( sign   = ycl_addict_toolkit=>sign-include
+                                        option = ycl_addict_toolkit=>option-eq
+                                        low    = iv_parva ) )
+                        ELSE VALUE #( sign = ycl_addict_toolkit=>sign-include
+                                      ( option = ycl_addict_toolkit=>option-eq
+                                        low    = iv_parva )
+                                      ( option = ycl_addict_toolkit=>option-cp
+                                        low    = |*{ iv_parva }| )
+                                      ( option = ycl_addict_toolkit=>option-cp
+                                        low    = |*{ iv_parva }*| )
+                                      ( option = ycl_addict_toolkit=>option-cp
+                                        low    = |{ iv_parva }*| ) ) ).
+
+    SELECT FROM usr05
+           FIELDS bname
+           WHERE parid  = @iv_parid
+             AND parva IN @parva_rng
+           INTO TABLE @DATA(bnames).
+
+    CASE lines( bnames ).
+      WHEN 0.
+        RAISE EXCEPTION NEW zcx_bc_user_master_data( textid = zcx_bc_user_master_data=>no_user_for_param_val
+                                                     parid  = iv_parid
+                                                     parva  = iv_parva ).
+
+      WHEN 1.
+        ro_obj = get_instance( iv_bname             = bnames[ 1 ]-bname
+                               iv_tolerate_inactive = iv_tolerate_inactive ).
+
+      WHEN OTHERS.
+        RAISE EXCEPTION NEW zcx_bc_user_master_data( textid = zcx_bc_user_master_data=>multi_user_for_param_val
+                                                     parid  = iv_parid
+                                                     parva  = iv_parva ).
     ENDCASE.
   ENDMETHOD.
 

@@ -21,6 +21,7 @@ CLASS zcl_sd_invoice DEFINITION
              spart TYPE vbrk-spart,
              fkart TYPE vbrk-fkart,
              knumv TYPE vbrk-knumv,
+             bukrs TYPE vbrk-bukrs,
            END OF t_header,
 
            BEGIN OF t_item,
@@ -41,6 +42,7 @@ CLASS zcl_sd_invoice DEFINITION
              parvw TYPE vbpa-parvw,
              kunnr TYPE vbpa-kunnr,
              adrnr TYPE vbpa-adrnr,
+             land1 TYPE vbpa-land1,
            END OF t_partner,
 
            tt_partners TYPE HASHED TABLE OF t_partner
@@ -108,6 +110,9 @@ CLASS zcl_sd_invoice DEFINITION
 
       get_conditions     RETURNING VALUE(rt_conditions) TYPE tt_condition.
 
+    METHODS is_export RETURNING VALUE(result) TYPE abap_bool
+                      RAISING   zcx_fi_company_code_def.
+
   PRIVATE SECTION.
     TYPES:
       BEGIN OF t_multiton,
@@ -129,6 +134,7 @@ CLASS zcl_sd_invoice DEFINITION
         einv_url     TYPE abap_bool,
         einv_url_tmp TYPE abap_bool,
         e_url        TYPE abap_bool,
+        is_export    TYPE abap_bool,
       END OF t_lazy_flg,
 
       BEGIN OF t_lazy_val,
@@ -141,6 +147,7 @@ CLASS zcl_sd_invoice DEFINITION
         einv_url     TYPE string,
         einv_url_tmp TYPE string,
         e_url        TYPE string,
+        is_export    TYPE abap_bool,
       END OF t_lazy_val,
 
       BEGIN OF t_lazy,
@@ -151,7 +158,6 @@ CLASS zcl_sd_invoice DEFINITION
     CONSTANTS: awtyp            TYPE bkpf-awtyp VALUE 'VBRK',
                initial_posnr    TYPE posnr      VALUE '000000',
                tabname_head     TYPE tabname    VALUE 'VBRK',
-               name3_vkn_prefix TYPE adrc-name3 VALUE 'T.C./vergi no:',
                default_vkn      TYPE char11     VALUE '11111111111'.
 
     CONSTANTS: BEGIN OF earc_url_part,
@@ -184,10 +190,7 @@ CLASS zcl_sd_invoice IMPLEMENTATION.
     IF gs_lazy-flg-conditions = abap_false.
 
       SELECT knumv, kposn, stunr, zaehk, kschl, kbetr, waers "#EC CI_NOORDER
-*S4Hana conversion begin change by busra.acikmese@detaysoft.com 21 Nis 2022 15:44:02 {
-*        from konv
              FROM prcd_elements
-*S4Hana conversion end change by busra.acikmese@detaysoft.com 21 Nis 2022 15:44:02 }
              WHERE knumv = @gs_header-knumv
              INTO CORRESPONDING FIELDS OF TABLE @gs_lazy-val-conditions.
 
@@ -195,6 +198,28 @@ CLASS zcl_sd_invoice IMPLEMENTATION.
     ENDIF.
 
     rt_conditions = gs_lazy-val-conditions.
+  ENDMETHOD.
+
+  METHOD is_export.
+    IF gs_lazy-flg-is_export = abap_false.
+      DO 1 TIMES.
+        DATA(partners) = get_partners( ).
+
+        TRY.
+            DATA(sold_to_partner) = REF #( partners[ parvw = c_parvw-sold_to ] ).
+          CATCH cx_sy_itab_line_not_found.
+            EXIT.
+        ENDTRY.
+
+        DATA(company) = zcl_fi_company=>get_instance( gs_header-bukrs ).
+
+        gs_lazy-val-is_export = xsdbool( sold_to_partner->land1 <> company->gs_def-land1 ).
+      ENDDO.
+
+      gs_lazy-flg-is_export = abap_true.
+    ENDIF.
+
+    result = gs_lazy-val-is_export.
   ENDMETHOD.
 
   METHOD get_edoc_analyser.
@@ -294,7 +319,7 @@ CLASS zcl_sd_invoice IMPLEMENTATION.
       EXPORTING input  = iv_vbeln
       IMPORTING output = lv_vbeln.
 
-    SELECT SINGLE vbeln, vkorg, vtweg, fksto, rfbsk, spart, fkart, knumv
+    SELECT SINGLE vbeln, vkorg, vtweg, fksto, rfbsk, spart, fkart, knumv, bukrs
            FROM vbrk
            WHERE vbeln = @lv_vbeln
            INTO CORRESPONDING FIELDS OF @gs_header.
@@ -393,7 +418,7 @@ CLASS zcl_sd_invoice IMPLEMENTATION.
 
   METHOD get_partners.
     IF gs_lazy-flg-partners = abap_false.
-      SELECT DISTINCT parvw, kunnr, adrnr
+      SELECT DISTINCT parvw, kunnr, adrnr, land1
              FROM vbpa
              WHERE vbeln = @gv_vbeln
                AND posnr = @me->initial_posnr

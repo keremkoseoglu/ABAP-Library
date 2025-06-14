@@ -20,6 +20,7 @@ CLASS zcl_sd_delivery DEFINITION
         lfart     TYPE likp-lfart,
         pkstk     TYPE v_vbuk_s4-pkstk,
         vkorg     TYPE likp-vkorg,
+        erdat     TYPE likp-erdat,
       END OF t_head,
 
       BEGIN OF t_item,
@@ -85,6 +86,10 @@ CLASS zcl_sd_delivery DEFINITION
                  complete TYPE v_vbuk_s4-wbstk VALUE 'C',
                END OF wbstk.
 
+    CONSTANTS: BEGIN OF parvw,
+                 sold_to TYPE vbpa-parvw VALUE 'AG',
+               END OF parvw.
+
     DATA gs_head TYPE t_head.
 
     CLASS-METHODS:
@@ -111,6 +116,11 @@ CLASS zcl_sd_delivery DEFINITION
     CLASS-METHODS does_delivery_exist
       IMPORTING iv_vbeln         TYPE likp-vbeln
       RETURNING VALUE(rv_exists) TYPE abap_bool.
+
+    CLASS-METHODS does_delivery_item_exist
+      IMPORTING vbeln         TYPE lips-vbeln
+                posnr         TYPE lips-posnr
+      RETURNING VALUE(result) TYPE abap_bool.
 
     METHODS:
       attach_gos_doc
@@ -155,6 +165,11 @@ CLASS zcl_sd_delivery DEFINITION
 
     METHODS get_singular_dist_channel RETURNING VALUE(result) TYPE vtweg.
 
+    METHODS get_partner_country
+      IMPORTING parvw         TYPE vbpa-parvw
+      RETURNING VALUE(result) TYPE land1
+      RAISING   zcx_sd_delivery_def.
+
   PRIVATE SECTION.
     TYPES:
       BEGIN OF t_lazy_flg,
@@ -188,6 +203,13 @@ CLASS zcl_sd_delivery DEFINITION
 
     TYPES vtweg_list  TYPE STANDARD TABLE OF vtweg WITH KEY table_line.
 
+    TYPES: BEGIN OF t_partner_country,
+             parvw TYPE vbpa-parvw,
+             land1 TYPE land1,
+           END OF t_partner_country,
+
+           tt_partner_country TYPE HASHED TABLE OF t_partner_country WITH UNIQUE KEY primary_key COMPONENTS parvw.
+
     CONSTANTS:
       BEGIN OF c_pkstk,
         completed TYPE pkstk VALUE 'C',
@@ -200,7 +222,8 @@ CLASS zcl_sd_delivery DEFINITION
 
     CLASS-DATA gt_multiton TYPE tt_multiton.
 
-    DATA gs_lazy TYPE t_lazy.
+    DATA: gs_lazy            TYPE t_lazy,
+          gt_partner_country TYPE tt_partner_country.
 
     METHODS constructor
       IMPORTING iv_vbeln TYPE likp-vbeln
@@ -220,12 +243,9 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
   METHOD constructor.
     TRY.
         SELECT SINGLE likp~vbeln, likp~kunnr, likp~btgew, likp~gewei, likp~vstel, likp~vbtyp, likp~wadat_ist,
-                      likp~kunag, likp~lfart, likp~vkorg, vbuk~gbstk, vbuk~wbstk, vbuk~kostk, vbuk~pkstk
+                      likp~kunag, likp~lfart, likp~vkorg, likp~erdat, vbuk~gbstk, vbuk~wbstk, vbuk~kostk, vbuk~pkstk
                FROM likp
-*S4Hana conversion begin change by busra.acikmese@detaysoft.com 22 Nis 2022 10:49:49 {
-*             LEFT JOIN vbuk
                     LEFT JOIN v_vbuk_s4 AS vbuk
-*S4Hana conversion end change by busra.acikmese@detaysoft.com 22 Nis 2022 10:49:49 }
                       ON vbuk~vbeln = likp~vbeln
                WHERE likp~vbeln = @iv_vbeln
                INTO CORRESPONDING FIELDS OF @gs_head.   "#EC CI_NOORDER
@@ -358,6 +378,14 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
            INTO @sy-mandt ##WRITE_OK.
 
     rv_exists = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+  METHOD does_delivery_item_exist.
+    SELECT SINGLE FROM lips
+           FIELDS @abap_true
+           WHERE vbeln = @vbeln
+             AND posnr = @posnr
+           INTO @result.
   ENDMETHOD.
 
   METHOD get_total_weight_of_dlvs_wo_hu.
@@ -552,6 +580,41 @@ CLASS zcl_sd_delivery IMPLEMENTATION.
         ##FIXME. " Burada düzgün bir exception
         ASSERT 1 = 0.
     ENDCASE.
+  ENDMETHOD.
+
+  METHOD get_partner_country.
+    DATA empty_posnr TYPE vbpa-posnr.
+
+    TRY.
+        DATA(lr_pc) = REF #( gt_partner_country[ KEY primary_key
+                                                 parvw = parvw ] ).
+
+      CATCH cx_sy_itab_line_not_found.
+        DATA(ls_new_pc) = VALUE t_partner_country( parvw = parvw ).
+
+        SELECT SINGLE
+               FROM vbpa
+                    INNER JOIN adrc
+                      ON adrc~addrnumber = vbpa~adrnr
+               FIELDS adrc~country
+               WHERE vbpa~vbeln      = @gs_head-vbeln
+                 AND vbpa~posnr      = @empty_posnr
+                 AND vbpa~parvw      = @ls_new_pc-parvw
+                 AND adrc~date_from <= @sy-datum
+                 AND adrc~nation     = @space
+                 AND adrc~date_to   >= @sy-datum
+               INTO @ls_new_pc-land1.
+
+        IF ls_new_pc-land1 IS INITIAL.
+          RAISE EXCEPTION NEW zcx_sd_delivery_def( textid = zcx_sd_delivery_def=>no_country_for_partner
+                                                   vbeln  = gs_head-vbeln
+                                                   parvw  = ls_new_pc-parvw ).
+        ENDIF.
+
+        INSERT ls_new_pc INTO TABLE gt_partner_country REFERENCE INTO lr_pc.
+    ENDTRY.
+
+    result = lr_pc->land1.
   ENDMETHOD.
 
   METHOD get_total_weight.

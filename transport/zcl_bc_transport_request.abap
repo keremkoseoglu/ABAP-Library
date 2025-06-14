@@ -167,7 +167,6 @@ CLASS zcl_bc_transport_request DEFINITION
 
     CLASS-METHODS get_requests_containing_obj
       IMPORTING it_obj            TYPE tt_request_object_tag
-                iv_top            TYPE abap_bool            DEFAULT abap_true
                 iv_holistic_cls   TYPE abap_bool            DEFAULT abap_false
                 it_trfunction_rng TYPE zbctt_trfunction_rng OPTIONAL
       RETURNING VALUE(rt_req)     TYPE tt_request_and_object.
@@ -235,7 +234,6 @@ CLASS zcl_bc_transport_request DEFINITION
 
     METHODS get_obj_related_requests
       IMPORTING iv_include_self   TYPE abap_bool                           DEFAULT abap_false
-                iv_top            TYPE abap_bool                           DEFAULT abap_true
                 it_obj_name_rng   TYPE tt_obj_name_rng                     OPTIONAL
                 iv_holistic_cls   TYPE abap_bool                           DEFAULT abap_false
                 it_trfunction_rng TYPE zbctt_trfunction_rng                OPTIONAL
@@ -532,7 +530,6 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
     TRY.
         rt_list = CORRESPONDING #(
             me->core->get_obj_related_requests( include_self   = iv_include_self
-                                                top            = iv_top
                                                 obj_name_rng   = CORRESPONDING #( it_obj_name_rng )
                                                 holistic_cls   = iv_holistic_cls
                                                 trfunction_rng = CORRESPONDING #( it_trfunction_rng )
@@ -593,7 +590,6 @@ CLASS zcl_bc_transport_request IMPLEMENTATION.
     rt_req = CORRESPONDING #(
         ycl_addict_transport_request=>get_requests_containing_obj(
             obj            = CORRESPONDING #( it_obj )
-            top            = iv_top
             holistic_cls   = iv_holistic_cls
             trfunction_rng = CORRESPONDING #( it_trfunction_rng ) ) ).
   ENDMETHOD.

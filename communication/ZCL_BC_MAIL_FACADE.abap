@@ -1,6 +1,5 @@
 CLASS zcl_bc_mail_facade DEFINITION
-  PUBLIC
-  FINAL
+  PUBLIC FINAL
   CREATE PUBLIC.
 
   PUBLIC SECTION.
@@ -59,6 +58,7 @@ CLASS zcl_bc_mail_facade DEFINITION
                 it_cc               TYPE rke_userid          OPTIONAL
                 it_rlist            TYPE tt_rlist            OPTIONAL
                 it_dlist            TYPE tt_dlist            OPTIONAL
+                it_dlist_cc         TYPE tt_dlist            OPTIONAL
                 iv_subject          TYPE so_obj_des
                 iv_tolerate_no_addr TYPE abap_bool           DEFAULT abap_false
                 it_body             TYPE bcsy_text
@@ -116,26 +116,30 @@ CLASS zcl_bc_mail_facade DEFINITION
 
     CLASS-METHODS send_html_table_email
       IMPORTING t_data          TYPE ANY TABLE           OPTIONAL
+                t_data2         TYPE ANY TABLE           OPTIONAL
                 t_rcvlist       TYPE zsdtt_mail_receiver OPTIONAL
+                t_rcvlist_cc    TYPE zsdtt_mail_receiver OPTIONAL
                 t_columns       TYPE zsdtt_column        OPTIONAL
+                t_columns2      TYPE zsdtt_column        OPTIONAL
                 iv_so10_object  TYPE tdobname            OPTIONAL
                 iv_subject      TYPE so_obj_des          OPTIONAL
                 iv_long_subject TYPE string              OPTIONAL
                 t_body          TYPE tlinet              OPTIONAL
                 it_dlist        TYPE tt_dlist            OPTIONAL
-                iv_send_as_cc   TYPE so_snd_cp           DEFAULT abap_true
       RAISING   zcx_bc_mail_send.
 
     CLASS-METHODS send_html_table_email_with_str
       IMPORTING col_structure   TYPE tabname
+                col_structure2  TYPE tabname OPTIONAL
                 t_data          TYPE ANY TABLE           OPTIONAL
+                t_data2         TYPE ANY TABLE           OPTIONAL
                 t_rcvlist       TYPE zsdtt_mail_receiver OPTIONAL
+                t_rcvlist_cc    TYPE zsdtt_mail_receiver OPTIONAL
                 iv_so10_object  TYPE tdobname            OPTIONAL
                 iv_subject      TYPE so_obj_des          OPTIONAL
                 iv_long_subject TYPE string              OPTIONAL
                 t_body          TYPE tlinet              OPTIONAL
                 it_dlist        TYPE tt_dlist            OPTIONAL
-                iv_send_as_cc   TYPE so_snd_cp           DEFAULT abap_true
       RAISING   zcx_bc_mail_send.
 
     CLASS-METHODS send_symsg_as_email
@@ -150,6 +154,10 @@ CLASS zcl_bc_mail_facade DEFINITION
       IMPORTING email TYPE ad_smtpadr
       RAISING   zcx_bc_email_address.
 
+    CLASS-METHODS get_alt_domain_email_addresses
+      IMPORTING email_address TYPE ad_smtpadr
+      RETURNING VALUE(result) TYPE bcsy_smtpa.
+
   PRIVATE SECTION.
     CONSTANTS c_att_type_pdf           TYPE soodk-objtp VALUE 'PDF' ##NO_TEXT.
     CONSTANTS c_linsz                  TYPE i           VALUE 255 ##NO_TEXT.
@@ -159,7 +167,10 @@ CLASS zcl_bc_mail_facade DEFINITION
 ENDCLASS.
 
 
-CLASS zcl_bc_mail_facade IMPLEMENTATION.
+
+CLASS ZCL_BC_MAIL_FACADE IMPLEMENTATION.
+
+
   METHOD cleanse_email_address.
     " Hazırlık """"""""""""""""""""""""""""""""""""""""""""""""""""""
 
@@ -185,6 +196,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
     ENDWHILE.
   ENDMETHOD.
 
+
   METHOD conv_symsg_to_body.
     DATA ls_symsg TYPE symsg.
 
@@ -209,17 +221,19 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
             INTO   <lv_body>.
   ENDMETHOD.
 
+
   METHOD get_email_of_user.
     SELECT SINGLE smtp_addr FROM adr6
-      WHERE addrnumber = ( SELECT addrnumber FROM usr21 WHERE bname = @iv_uname ) AND
-            persnumber = ( SELECT persnumber FROM usr21 WHERE bname = @iv_uname )
-      INTO @rv_email ##WARN_OK.                         "#EC CI_NOORDER
+           WHERE addrnumber = ( SELECT addrnumber FROM usr21 WHERE bname = @iv_uname )
+             AND persnumber = ( SELECT persnumber FROM usr21 WHERE bname = @iv_uname )
+           INTO @rv_email ##WARN_OK.                         "#EC CI_NOORDER
 
     IF rv_email IS INITIAL AND iv_check = abap_true.
       RAISE EXCEPTION NEW zcx_bc_user_master_data( textid = zcx_bc_user_master_data=>email_missing
                                                    uname  = iv_uname ).
     ENDIF.
   ENDMETHOD.
+
 
   METHOD get_excel_columns_of_fcat.
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -229,6 +243,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
     rt_col = zcl_bc_mail_excel_attachment=>get_excel_columns_of_fcat( it_fcat ).
   ENDMETHOD.
 
+
   METHOD get_excel_columns_of_table.
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     " Aslında bu yordamın burada işi yok. Ancak, çok fazla yerde
@@ -237,21 +252,21 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
     rt_col = zcl_bc_mail_excel_attachment=>get_excel_columns_of_table( iv_tabname ).
   ENDMETHOD.
 
+
   METHOD get_user_of_email.
-    SELECT SINGLE u~bname
-      INTO rv_bname
-      FROM
-        usr21 AS u
-        INNER JOIN adr6 AS a ON
-          a~persnumber = u~persnumber AND
-          a~addrnumber = u~addrnumber
-      WHERE smtp_addr = iv_smtp ##WARN_OK.              "#EC CI_NOORDER
+    SELECT SINGLE u~bname INTO rv_bname
+           FROM usr21           AS u
+                INNER JOIN adr6 AS a
+                  ON  a~persnumber = u~persnumber
+                  AND a~addrnumber = u~addrnumber
+           WHERE smtp_addr = iv_smtp ##WARN_OK.              "#EC CI_NOORDER
 
     IF rv_bname IS INITIAL.
       RAISE EXCEPTION NEW zcx_bc_user_master_data( textid = zcx_bc_user_master_data=>user_email_nomatch
                                                    email  = iv_smtp ).
     ENDIF.
   ENDMETHOD.
+
 
   METHOD send_email.
     TRY.
@@ -265,6 +280,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
                        cc               = it_cc
                        rlist            = it_rlist
                        dlist            = it_dlist
+                       dlist_cc         = it_dlist_cc
                        subject          = iv_subject
                        tolerate_no_addr = iv_tolerate_no_addr
                        body             = it_body
@@ -366,6 +382,23 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
           ENDLOOP.
         ENDIF.
 
+        IF it_dlist_cc IS SUPPLIED.
+          LOOP AT it_dlist_cc ASSIGNING <ls_list>.
+            TRY.
+                lo_send_request->add_recipient( i_recipient = cl_distributionlist_bcs=>getu_persistent(
+                                                                  i_dliname = <ls_list>-dname
+                                                                  i_private = '' )
+                                                i_copy      = abap_true
+                                                i_express   = abap_true ).
+
+              CATCH cx_root INTO lo_cx_bumd.
+                IF iv_tolerate_no_addr = abap_false.
+                  RAISE EXCEPTION lo_cx_bumd.
+                ENDIF.
+            ENDTRY.
+          ENDLOOP.
+        ENDIF.
+
         " Hiç alıcı yoksa hata """"""""""""""""""""""""""""""""""""""
         IF     it_to    IS INITIAL
            AND it_cc    IS INITIAL
@@ -450,6 +483,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+
   METHOD send_email_with_sap_link.
     CHECK    it_to    IS NOT INITIAL
           OR it_cc    IS NOT INITIAL
@@ -489,6 +523,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
                 iv_async            = iv_async ).
   ENDMETHOD.
 
+
   METHOD send_excel_tables_email.
     DATA lt_bin_att TYPE tt_attachment_bin.
 
@@ -523,6 +558,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+
   METHOD send_excel_table_email.
     DATA(excel_attachment) =
       VALUE tt_excel_attachment( ( itab_ref        = REF #( t_data )
@@ -541,6 +577,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
                              iv_commit       = iv_commit ).
   ENDMETHOD.
 
+
   METHOD send_html_table_email.
     TYPES:
       BEGIN OF ty_mail_receiver,
@@ -550,6 +587,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
     DATA : lo_table    TYPE REF TO cl_abap_tabledescr,
            lo_str      TYPE REF TO cl_abap_structdescr,
            lt_fields   TYPE abap_compdescr_tab,
+           lt_fields2  TYPE abap_compdescr_tab,
            lt_lines    TYPE TABLE OF tline,
            ls_fields   TYPE abap_compdescr,
            lv_dli_name TYPE soobjinfi1-obj_name,
@@ -581,11 +619,25 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
         lo_str   ?= lo_table->get_table_line_type( ).
         APPEND LINES OF lo_str->components TO lt_fields.
 
-        DESCRIBE TABLE lt_fields LINES lv_line_data.
-        DESCRIBE TABLE t_columns LINES lv_line_columns.
+
+
+        lv_line_data = lines( lt_fields ).
+        lv_line_columns = lines( t_columns ).
 
         IF lv_line_data <> lv_line_columns.
           RAISE EXCEPTION NEW zcx_bc_mail_send( textid = zcx_bc_mail_send=>column_number_not_valid ).
+        ENDIF.
+
+        IF t_columns2 IS NOT INITIAL AND t_data2 IS SUPPLIED.
+           lo_table ?= cl_abap_typedescr=>describe_by_data( t_data2 ).
+           lo_str   ?= lo_table->get_table_line_type( ).
+           APPEND LINES OF lo_str->components TO lt_fields2.
+           lv_line_data = lines( lt_fields2 ).
+           lv_line_columns = lines( t_columns2 ).
+
+           IF lv_line_data <> lv_line_columns.
+             RAISE EXCEPTION NEW zcx_bc_mail_send( textid = zcx_bc_mail_send=>column_number_not_valid ).
+           ENDIF.
         ENDIF.
 
         " Mail başlık
@@ -638,6 +690,9 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
           ENDLOOP.
         ENDIF.
 
+*--------------------------------------------------------------------*
+* table 1
+*--------------------------------------------------------------------*
         CLEAR ls_objtxt.
         ls_objtxt-line = '<center>'.
         APPEND ls_objtxt TO lt_objtxt.
@@ -675,13 +730,58 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
         ls_objtxt-line = '</center>'.
         APPEND ls_objtxt TO lt_objtxt.
         CLEAR ls_objtxt.
+*--------------------------------------------------------------------*
+* table 2
+*--------------------------------------------------------------------*
+      IF t_columns2 IS NOT INITIAL.
+        html_body_txt ''.
+        CLEAR ls_objtxt.
+        ls_objtxt-line = '<center>'.
+        APPEND ls_objtxt TO lt_objtxt.
 
+        CLEAR  ls_objtxt.
+        ls_objtxt-line = '<TABLE  width= "100%" border="1">'.
+        APPEND ls_objtxt TO lt_objtxt.
+
+        LOOP AT t_columns2 ASSIGNING <s_columns>.
+          IF sy-tabix = 1.
+            html_hdr '<TR>' <s_columns>-zcolumn_txt ##NO_TEXT.
+          ELSE.
+            html_hdr ''     <s_columns>-zcolumn_txt ##NO_TEXT.
+          ENDIF.
+        ENDLOOP.
+
+        LOOP AT t_data2 ASSIGNING <fs>.
+
+          LOOP AT lt_fields2 INTO ls_fields.
+            ASSIGN COMPONENT ls_fields-name OF STRUCTURE <fs> TO <fs_value>.
+
+            IF sy-tabix = 1.
+              html_itm '<TR>' <fs_value> ##NO_TEXT.
+            ELSE.
+              html_itm '' <fs_value> ##NO_TEXT.
+            ENDIF.
+          ENDLOOP.
+
+        ENDLOOP.
+
+        ls_objtxt-line = '</TABLE>'.
+        APPEND ls_objtxt TO lt_objtxt.
+        CLEAR  ls_objtxt.
+
+        ls_objtxt-line = '</center>'.
+        APPEND ls_objtxt TO lt_objtxt.
+        CLEAR ls_objtxt.
+     ENDIF.
+*--------------------------------------------------------------------*
+*
+*--------------------------------------------------------------------*
         ls_objtxt-line = '</FONT></body>'.
         APPEND ls_objtxt TO lt_objtxt.
         CLEAR ls_objtxt.
 
         " Packing
-        DESCRIBE TABLE lt_objtxt LINES lv_msg_lines.
+        lv_msg_lines = lines( lt_objtxt ).
         READ TABLE lt_objtxt INTO ls_objtxt INDEX lv_msg_lines.
 
         ls_doc_chng-doc_size  = ( lv_msg_lines - 1 ) * c_linsz + strlen( ls_objtxt ).
@@ -694,7 +794,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
         APPEND ls_objpack TO lt_objpack.
         CLEAR ls_objpack.
 
-        DESCRIBE TABLE lt_output_soli LINES lv_lines.
+        lv_lines = lines( lt_output_soli ).
 
         IF lv_lines <> 0.
           LOOP AT lt_output_soli INTO ls_output_soli.
@@ -741,7 +841,15 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
           ls_reclist-receiver = <s_rcvlist>-receiver.
           ls_reclist-rec_type = c_rec_type.
           ls_reclist-express  = c_express.
-          ls_reclist-copy     = iv_send_as_cc.
+          APPEND ls_reclist TO lt_reclist.
+          FREE ls_reclist.
+        ENDLOOP.
+
+        LOOP AT t_rcvlist_cc ASSIGNING <s_rcvlist>.
+          ls_reclist-receiver = <s_rcvlist>-receiver.
+          ls_reclist-rec_type = c_rec_type.
+          ls_reclist-express  = c_express.
+          ls_reclist-copy     = abap_true.
           APPEND ls_reclist TO lt_reclist.
           FREE ls_reclist.
         ENDLOOP.
@@ -780,6 +888,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+
   METHOD send_html_table_email_with_str.
     TRY.
         " Structure'a istinaden hazırlık """"""""""""""""""""""""""""""""
@@ -787,6 +896,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
         DATA(table_obj)    = ycl_addict_table=>get_instance( col_structure ).
         DATA(table_fields) = table_obj->get_fields( ).
         DATA(column_index) = CONV zsds_column( 0 ).
+
 
         LOOP AT table_fields ASSIGNING FIELD-SYMBOL(<tab_fld>).
           column_index += 1.
@@ -796,16 +906,37 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
                  TO html_columns.
         ENDLOOP.
 
+        IF col_structure2 IS NOT INITIAL AND t_data2 IS SUPPLIED.
+            IF t_data2 IS NOT INITIAL.
+                DATA(html_columns2) = VALUE zsdtt_column( ).
+                DATA(table_obj2)    = ycl_addict_table=>get_instance( col_structure2 ).
+                DATA(table_fields2) = table_obj2->get_fields( ).
+                DATA(column_index2) = CONV zsds_column( 0 ).
+
+
+                LOOP AT table_fields2 ASSIGNING FIELD-SYMBOL(<tab_fld2>).
+                  column_index2 += 1.
+
+                  APPEND VALUE #( zcolumn     = column_index2
+                                  zcolumn_txt = ycl_addict_data_element=>get_shortest_text_safe( <tab_fld2>-rollname ) )
+                         TO html_columns2.
+                ENDLOOP.
+            ENDIF.
+
+        ENDIF.
+
         " Gönderim """"""""""""""""""""""""""""""""""""""""""""""""""""""
         send_html_table_email( t_data          = t_data
+                               t_data2         = t_data2
                                t_rcvlist       = t_rcvlist
+                               t_rcvlist_cc    = t_rcvlist_cc
                                t_columns       = html_columns
+                               t_columns2      = html_columns2
                                iv_so10_object  = iv_so10_object
                                iv_subject      = iv_subject
                                iv_long_subject = iv_long_subject
                                t_body          = t_body
-                               it_dlist        = it_dlist
-                               iv_send_as_cc   = iv_send_as_cc ).
+                               it_dlist        = it_dlist ).
 
       CATCH zcx_bc_mail_send INTO DATA(send_error).
         RAISE EXCEPTION send_error.
@@ -816,6 +947,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+
   METHOD send_symsg_as_email.
     send_email( it_body    = conv_symsg_to_body( is_symsg )
                 it_to      = it_to
@@ -823,6 +955,7 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
                 iv_from    = iv_from
                 iv_subject = iv_subject ).
   ENDMETHOD.
+
 
   METHOD validate_email_address.
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -837,5 +970,17 @@ CLASS zcl_bc_mail_facade IMPLEMENTATION.
       RAISE EXCEPTION NEW zcx_bc_email_address( textid = zcx_bc_email_address=>invalid_address
                                                 email  = email ).
     ENDIF.
+  ENDMETHOD.
+
+
+  METHOD get_alt_domain_email_addresses.
+    TRY.
+        DATA(email_adr_set_factory) = CAST zif_bc_email_adr_set_factory( zcl_bc_email_set_alt_dom_fctry=>get_instance( ) ).
+        DATA(email_adr_set)         = email_adr_set_factory->create_adr_set_via_email( email_address ).
+        result = email_adr_set->to_itab( ).
+
+      CATCH cx_root.
+        result = VALUE #( ( email_address ) ).
+    ENDTRY.
   ENDMETHOD.
 ENDCLASS.

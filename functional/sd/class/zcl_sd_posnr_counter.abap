@@ -3,12 +3,16 @@ CLASS zcl_sd_posnr_counter DEFINITION
   CREATE PUBLIC.
 
   PUBLIC SECTION.
-    INTERFACES zif_sd_posnr_counter.
-
     METHODS constructor
       IMPORTING initial_posnr TYPE vbap-posnr DEFAULT '000010'
                 span          TYPE vbap-posnr DEFAULT '000010'
       RAISING   ycx_addict_object.
+
+    METHODS reset.
+
+    METHODS get_current RETURNING VALUE(result) TYPE vbap-posnr.
+
+    METHODS get_next    RETURNING VALUE(result) TYPE vbap-posnr.
 
   PRIVATE SECTION.
     CONSTANTS: BEGIN OF method_name,
@@ -55,10 +59,10 @@ CLASS zcl_sd_posnr_counter IMPLEMENTATION.
     me->initial_posnr = initial_posnr.
     me->span          = span.
 
-    zif_sd_posnr_counter~reset( ).
+    reset( ).
   ENDMETHOD.
 
-  METHOD zif_sd_posnr_counter~get_next.
+  METHOD get_next.
     CASE me->is_reset.
       WHEN abap_true.
         me->current_posnr = me->initial_posnr.
@@ -70,8 +74,12 @@ CLASS zcl_sd_posnr_counter IMPLEMENTATION.
     result = me->current_posnr.
   ENDMETHOD.
 
-  METHOD zif_sd_posnr_counter~reset.
+  METHOD reset.
     CLEAR me->current_posnr.
     me->is_reset = abap_true.
+  ENDMETHOD.
+
+  METHOD get_current.
+    result = me->current_posnr.
   ENDMETHOD.
 ENDCLASS.

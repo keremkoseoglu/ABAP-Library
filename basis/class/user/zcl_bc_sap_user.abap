@@ -420,33 +420,32 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
 
   METHOD get_instance_via_email.
     read_all_user_emails_lazy( ).
-    DATA(lv_cleansed_email) = zcl_bc_mail_facade=>cleanse_email_address( iv_email ).
-    DATA(lt_users)          = VALUE rke_userid( ).
 
-    LOOP AT gs_clazy_var-user_email ASSIGNING FIELD-SYMBOL(<ls_user_email>).
-      CHECK           zcl_bc_text_toolkit=>are_texts_same_ignoring_case( iv_text1 = lv_cleansed_email
-                                                                         iv_text2 = <ls_user_email>-email )
-            AND
-                ( NOT line_exists( lt_users[ table_line = <ls_user_email>-bname ] ) ).
+    DATA(alt_email_addresses) = zcl_bc_mail_facade=>get_alt_domain_email_addresses( iv_email ).
 
-      INSERT <ls_user_email>-bname INTO TABLE lt_users.
+    LOOP AT alt_email_addresses REFERENCE INTO DATA(alt_email_adr).
+      DATA(cleansed_email) = zcl_bc_mail_facade=>cleanse_email_address( alt_email_adr->* ).
+      DATA(users)          = VALUE rke_userid( ).
+
+      LOOP AT gs_clazy_var-user_email ASSIGNING FIELD-SYMBOL(<user_email>).
+        CHECK     zcl_bc_text_toolkit=>are_texts_same_ignoring_case( iv_text1 = cleansed_email
+                                                                     iv_text2 = <user_email>-email )
+              AND ( NOT line_exists( users[ table_line = <user_email>-bname ] ) ).
+
+        INSERT <user_email>-bname INTO TABLE users.
+      ENDLOOP.
+
+      CHECK lines( users ) = 1.
+
+      ro_obj = get_instance( iv_bname             = users[ 1 ]
+                             iv_tolerate_inactive = iv_tolerate_inactive ).
+
+      RETURN.
     ENDLOOP.
 
-    CASE lines( lt_users ).
-      WHEN 0.
-        RAISE EXCEPTION NEW zcx_bc_table_content( textid   = zcx_bc_table_content=>no_suitable_entry_found
-                                                  objectid = CONV #( iv_email )
-                                                  tabname  = c_table-adr6 ).
-
-      WHEN 1.
-        ro_obj = get_instance( iv_bname             = lt_users[ 1 ]
-                               iv_tolerate_inactive = iv_tolerate_inactive ).
-
-      WHEN OTHERS.
-        RAISE EXCEPTION NEW zcx_bc_table_content( textid   = zcx_bc_table_content=>multiple_entries_for_key
-                                                  objectid = CONV #( iv_email )
-                                                  tabname  = c_table-adr6 ).
-    ENDCASE.
+    RAISE EXCEPTION NEW zcx_bc_table_content( textid   = zcx_bc_table_content=>no_suitable_entry_found
+                                              objectid = CONV #( iv_email )
+                                              tabname  = c_table-adr6 ).
   ENDMETHOD.
 
   METHOD get_instance_via_param_val.
@@ -465,7 +464,7 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
                                       ( option = ycl_addict_toolkit=>option-cp
                                         low    = |{ iv_parva }*| ) ) ).
 
-    SELECT FROM usr05
+    SELECT FROM usr05 "#EC CI_GENBUFF
            FIELDS bname
            WHERE parid  = @iv_parid
              AND parva IN @parva_rng

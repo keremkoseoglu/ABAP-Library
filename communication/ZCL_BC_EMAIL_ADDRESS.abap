@@ -7,7 +7,8 @@ CLASS zcl_bc_email_address DEFINITION
 
     CLASS-METHODS get_instance
       IMPORTING email_address TYPE ad_smtpadr
-      RETURNING VALUE(result) TYPE REF TO zcl_bc_email_address.
+      RETURNING VALUE(result) TYPE REF TO zcl_bc_email_address
+      RAISING   ycx_addict_email_address.
 
     METHODS get_cased_range RETURNING VALUE(result) TYPE /cfg/t_email.
 
@@ -39,7 +40,11 @@ CLASS zcl_bc_email_address DEFINITION
           domain      TYPE zbcd_email_domain,
           local_part  TYPE string.
 
-    METHODS constructor IMPORTING email_address TYPE ad_smtpadr.
+    CLASS-METHODS validate IMPORTING email_address TYPE ad_smtpadr
+                           RAISING   ycx_addict_email_address.
+
+    METHODS constructor IMPORTING email_address TYPE ad_smtpadr
+                        RAISING   ycx_addict_email_address.
 ENDCLASS.
 
 
@@ -120,7 +125,34 @@ CLASS zcl_bc_email_address IMPLEMENTATION.
     DELETE ADJACENT DUPLICATES FROM result COMPARING table_line.
   ENDMETHOD.
 
+  METHOD validate.
+    IF email_address IS INITIAL.
+      RAISE EXCEPTION NEW ycx_addict_email_address( textid = zcx_bc_email_address=>empty_address ).
+    ENDIF.
+
+    DATA(sx_adr) = VALUE sx_address( type    = 'INT'
+                                     address = email_address ).
+
+    TRY.
+        ##FM_SUBRC_OK
+        CALL FUNCTION 'SX_INTERNET_ADDRESS_TO_NORMAL'
+          EXPORTING  address_unstruct    = sx_adr
+          EXCEPTIONS error_address_type  = 1
+                     error_address       = 2
+                     error_group_address = 3
+                     OTHERS              = 4.
+
+        ycx_addict_function_subrc=>raise_if_sysubrc_not_initial( 'SX_INTERNET_ADDRESS_TO_NORMAL' ).
+
+      CATCH cx_root INTO DATA(email_error).
+        RAISE EXCEPTION NEW ycx_addict_email_address( textid   = ycx_addict_email_address=>invalid_address
+                                                      previous = email_error
+                                                      email    = email_address ).
+    ENDTRY.
+  ENDMETHOD.
+
   METHOD constructor.
+    validate( email_address ).
     me->email_address = email_address.
   ENDMETHOD.
 ENDCLASS.

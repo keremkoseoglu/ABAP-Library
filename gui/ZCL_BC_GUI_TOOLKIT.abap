@@ -107,7 +107,6 @@ CLASS zcl_bc_gui_toolkit DEFINITION
       IMPORTING iv_line          TYPE txw_note-line OPTIONAL
       RETURNING VALUE(rt_trkorr) TYPE zcl_bc_transport_request=>tt_trkorr.
 
-    " -- mehmet sertkaya
     CLASS-METHODS sapgui_mess
       IMPORTING iv_top  TYPE int4
                 iv_akt  TYPE int4
@@ -185,10 +184,19 @@ CLASS zcl_bc_gui_toolkit DEFINITION
                 iv_level   TYPE i
                 iv_message TYPE text100.
 
+    CLASS-METHODS is_in_background RETURNING VALUE(result) TYPE abap_bool.
+
   PRIVATE SECTION.
+    TYPES: BEGIN OF cache_val_map,
+             is_in_background TYPE abap_bool,
+           END OF cache_val_map,
+
+           cache_map TYPE cache_val_map WITH INDICATORS is_set TYPE abap_bool.
+
     TYPES tt_txw_note TYPE STANDARD TABLE OF txw_note WITH DEFAULT KEY.
 
-    CLASS-DATA gv_top_node TYPE lvc_nkey.
+    CLASS-DATA: gv_top_node TYPE lvc_nkey,
+                gs_cache    TYPE cache_map.
 ENDCLASS.
 
 
@@ -978,6 +986,25 @@ CLASS zcl_bc_gui_toolkit IMPLEMENTATION.
     CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
       EXPORTING percentage = lv_rate
                 text       = lv_message.
+  ENDMETHOD.
+
+  METHOD is_in_background.
+    DATA gui_on TYPE sy-batch.
+
+    IF gs_cache-is_set-is_in_background = abap_false.
+      IF sy-batch = abap_true.
+        gs_cache-is_in_background = abap_true.
+      ELSE.
+        CALL FUNCTION 'RS_RFC_IS_GUI_ON'
+          IMPORTING on = gui_on.
+
+        gs_cache-is_in_background = xsdbool( gui_on <> 'Y' ).
+      ENDIF.
+
+      gs_cache-is_set-is_in_background = abap_true.
+    ENDIF.
+
+    result = gs_cache-is_in_background.
   ENDMETHOD.
 
   METHOD get_deepest_exception.

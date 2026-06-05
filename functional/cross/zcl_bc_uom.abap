@@ -30,6 +30,8 @@ CLASS zcl_bc_uom DEFINITION
 
     METHODS is_weight               RETURNING VALUE(result) TYPE abap_bool.
 
+    METHODS is_duration             RETURNING VALUE(result) TYPE abap_bool.
+
     METHODS get_short_text
       IMPORTING spras         TYPE sylangu DEFAULT sy-langu
       RETURNING VALUE(result) TYPE mseh3.
@@ -65,6 +67,7 @@ CLASS zcl_bc_uom DEFINITION
 
     CONSTANTS: BEGIN OF c_dimid,
                  mass TYPE t006-dimid VALUE 'MASS',
+                 time TYPE t006-dimid VALUE 'TIME',
                END OF c_dimid.
 
     CLASS-DATA: gt_multiton     TYPE tt_multiton,
@@ -213,6 +216,10 @@ CLASS zcl_bc_uom IMPLEMENTATION.
 
   METHOD is_weight.
     result = xsdbool( gs_def-dimid = c_dimid-mass ).
+  ENDMETHOD.
+
+  METHOD is_duration.
+    result = xsdbool( gs_def-dimid = c_dimid-time ).
   ENDMETHOD.
 
   METHOD get_short_text.

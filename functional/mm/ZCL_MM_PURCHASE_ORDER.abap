@@ -38,6 +38,11 @@ CLASS zcl_mm_purchase_order DEFINITION PUBLIC FINAL CREATE PRIVATE.
                 iv_max_wait_seconds TYPE i DEFAULT 60
       RAISING   zcx_bc_lock.
 
+    CLASS-METHODS wait_until_po_exists
+      IMPORTING ebeln            TYPE ebeln
+                max_wait_seconds TYPE i DEFAULT 60
+      RAISING   zcx_bc_commit_wait_expire.
+
     CLASS-METHODS get_instance
       IMPORTING is_key        TYPE t_key
       RETURNING VALUE(ro_obj) TYPE REF TO zcl_mm_purchase_order
@@ -48,6 +53,12 @@ CLASS zcl_mm_purchase_order DEFINITION PUBLIC FINAL CREATE PRIVATE.
     METHODS ensure_item_exists
       IMPORTING ebelp TYPE ebelp
       RAISING   zcx_mm_purchase_order.
+
+    METHODS get_items_pr_requester_name
+      IMPORTING ebelp         TYPE ebelp
+      RETURNING VALUE(result) TYPE ad_namtext.
+
+    METHODS get_first_plant RETURNING VALUE(result) TYPE werks_d.
 
   PRIVATE SECTION.
     TYPES: BEGIN OF t_multiton,
@@ -60,10 +71,20 @@ CLASS zcl_mm_purchase_order DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
     TYPES: BEGIN OF t_po_item,
              ebelp TYPE ekpo-ebelp,
+             banfn TYPE ekpo-banfn,
+             werks TYPE ekpo-werks,
            END OF t_po_item,
 
            tt_po_item TYPE HASHED TABLE OF t_po_item
                  WITH UNIQUE KEY primary_key COMPONENTS ebelp.
+
+    TYPES: BEGIN OF t_item_pr_requester_name,
+             ebelp             TYPE ebelp,
+             pr_requester_name TYPE ad_namtext,
+           END OF t_item_pr_requester_name,
+
+           tt_item_pr_requester TYPE HASHED TABLE OF t_item_pr_requester_name
+           WITH UNIQUE KEY primary_key COMPONENTS ebelp.
 
     CONSTANTS: BEGIN OF c_catid,
                  business_object TYPE sww_wi2obj-catid VALUE 'BO',
@@ -83,8 +104,9 @@ CLASS zcl_mm_purchase_order DEFINITION PUBLIC FINAL CREATE PRIVATE.
 
     CLASS-DATA gt_multiton TYPE tt_multiton.
 
-    DATA: gt_items      TYPE tt_po_item,
-          gv_items_read TYPE abap_bool.
+    DATA: gt_items                   TYPE tt_po_item,
+          gv_items_read              TYPE abap_bool,
+          gt_item_pr_requester_cache TYPE tt_item_pr_requester.
 
     METHODS constructor
       IMPORTING is_key TYPE t_key
@@ -132,6 +154,30 @@ CLASS zcl_mm_purchase_order IMPLEMENTATION.
                 iv_max_wait_seconds = iv_max_wait_seconds ).
 
     dequeue_po( iv_ebeln ).
+  ENDMETHOD.
+
+  METHOD wait_until_po_exists.
+    DATA(total_wait_time) = 0.
+
+    DO.
+      SELECT SINGLE FROM ekko
+             FIELDS @abap_true
+             WHERE ebeln = @ebeln
+             INTO @DATA(po_found).
+
+      IF po_found = abap_true.
+        RETURN.
+      ENDIF.
+
+      total_wait_time += 1.
+
+      IF total_wait_time > max_wait_seconds.
+        RAISE EXCEPTION NEW zcx_bc_commit_wait_expire( textid  = zcx_bc_commit_wait_expire=>entry_db_wait_expired
+                                                       doc_key = CONV #( ebeln ) ).
+      ENDIF.
+
+      WAIT UP TO 1 SECONDS.
+    ENDDO.
   ENDMETHOD.
 
   METHOD get_creator.
@@ -190,10 +236,57 @@ CLASS zcl_mm_purchase_order IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD get_items_pr_requester_name.
+    ASSIGN gt_item_pr_requester_cache[ KEY primary_key
+                                       ebelp = ebelp ] TO FIELD-SYMBOL(<cache>).
+    IF sy-subrc <> 0.
+      DATA(new_cache) = VALUE t_item_pr_requester_name( ebelp = ebelp ).
+
+      DO 1 TIMES.
+        DATA(po_items) = get_po_items( ).
+
+        ASSIGN po_items->*[ KEY primary_key COMPONENTS ebelp = new_cache-ebelp ] TO FIELD-SYMBOL(<po_item>).
+        CHECK sy-subrc = 0 AND <po_item>-banfn IS NOT INITIAL.
+
+        SELECT SINGLE FROM eban
+               FIELDS ernam
+               WHERE banfn = @<po_item>-banfn
+               INTO @DATA(pr_creator).
+
+        CHECK sy-subrc = 0 AND pr_creator IS NOT INITIAL.
+
+        TRY.
+            new_cache-pr_requester_name = zcl_bc_sap_user=>get_instance( iv_bname             = pr_creator
+                                                                         iv_tolerate_inactive = abap_true
+                                          )->get_full_name( ).
+
+          CATCH cx_root ##NO_HANDLER.
+        ENDTRY.
+
+        CHECK new_cache-pr_requester_name IS INITIAL.
+        new_cache-pr_requester_name = pr_creator.
+      ENDDO.
+
+      INSERT new_cache INTO TABLE gt_item_pr_requester_cache ASSIGNING <cache>.
+    ENDIF.
+
+    result = <cache>-pr_requester_name.
+  ENDMETHOD.
+
+  METHOD get_first_plant.
+    DATA(items) = get_po_items( ).
+
+    LOOP AT items->* REFERENCE INTO DATA(i) WHERE werks IS NOT INITIAL.
+      result = i->werks.
+      RETURN.
+    ENDLOOP.
+  ENDMETHOD.
+
   METHOD constructor.
     gv_ebeln = is_key-ebeln.
 
-    SELECT SINGLE ernam, bstyp, bsart, ekgrp FROM ekko
+    SELECT SINGLE ernam, bstyp, bsart, ekgrp
+           FROM ekko
            WHERE ebeln = @gv_ebeln
            INTO CORRESPONDING FIELDS OF @gs_header.
 
@@ -205,7 +298,8 @@ CLASS zcl_mm_purchase_order IMPLEMENTATION.
 
   METHOD get_po_items.
     IF gv_items_read = abap_false.
-      SELECT FROM ekpo FIELDS ebelp
+      SELECT FROM ekpo
+             FIELDS ebelp, banfn, werks
              WHERE ebeln = @gv_ebeln
              INTO CORRESPONDING FIELDS OF TABLE @gt_items.
 

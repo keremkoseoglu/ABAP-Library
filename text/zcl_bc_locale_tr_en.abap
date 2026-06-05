@@ -51,7 +51,7 @@ CLASS zcl_bc_locale_tr_en IMPLEMENTATION.
 
   METHOD zif_bc_locale~set_by_company.
     TRY.
-        DATA(company_language) = zcl_fi_company=>get_instance( bukrs )->gs_def-land1.
+        DATA(company_language) = zcl_fi_company=>get_instance( bukrs )->gs_def-spras.
 
       CATCH cx_root. " Paranoya
         CLEAR company_language.

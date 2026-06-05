@@ -83,7 +83,7 @@ CLASS zcl_bc_sap_user DEFINITION
 
     METHODS get_full_name RETURNING VALUE(rv_name)  TYPE full_name.
 
-    METHODS get_language  RETURNING VALUE(rv_langu) TYPE sylangu.
+    METHODS get_language  RETURNING VALUE(result) TYPE ref to zcl_bc_sap_user_language.
 
     METHODS get_mobile_number
       IMPORTING iv_tolerate_missing_number TYPE abap_bool DEFAULT abap_true
@@ -133,7 +133,7 @@ CLASS zcl_bc_sap_user DEFINITION
              pwdchgdate  TYPE xubcdat,
              uname_text  TYPE name_text,
              work_center TYPE object_person_assignment,
-             language    TYPE sylangu,
+             language    TYPE ref to zcl_bc_sap_user_language,
            END OF t_lazy_var.
 
     TYPES: BEGIN OF t_multiton,
@@ -206,6 +206,8 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD can_develop.
+    ##FIXME. " Burası tekrar değiştirildiğinde, YCL_ADDICT_SAP_USER yordamını çağıracak
+
     AUTHORITY-CHECK OBJECT 'S_DEVELOP'
                     FOR USER gv_bname
                     ID 'ACTVT'    FIELD '02'
@@ -363,16 +365,37 @@ CLASS zcl_bc_sap_user IMPLEMENTATION.
 
   METHOD get_language.
     IF gs_lazy_flag-language = abap_false.
-
-      SELECT SINGLE langu INTO @gs_lazy_var-language
+      " Kullanıcı adresindeki dil
+      ##WARN_OK
+      SELECT SINGLE langu INTO @data(user_langu)
              FROM adrp
-             WHERE persnumber = ( SELECT persnumber FROM usr21 WHERE bname = @gv_bname )
-        ##WARN_OK.                                      "#EC CI_NOORDER
+             WHERE persnumber = ( SELECT persnumber FROM usr21 WHERE bname = @gv_bname ).
 
+      " Kullanıcı ana verisindeki dil
+      IF user_langu IS INITIAL.
+        SELECT SINGLE FROM usr01
+               FIELDS langu
+               WHERE bname = @gv_bname
+               INTO @user_langu.
+      ENDIF.
+
+      " E-mail içerisindeki dil
+      IF user_langu IS INITIAL.
+        DATA(low_email) = to_lower( get_email( ) ).
+
+        IF low_email CS '.ma'.
+          user_langu = zcl_bc_sap_user_language=>spras-english.
+        ENDIF.
+      ENDIF.
+
+      " Bu kadar
+      gs_lazy_var-language = zcl_bc_sap_user_language=>get_normalized_instance( user_langu ).
+
+      " Flag
       gs_lazy_flag-language = abap_true.
     ENDIF.
 
-    rv_langu = gs_lazy_var-language.
+    result = gs_lazy_var-language.
   ENDMETHOD.
 
   METHOD get_full_name_wo_error.
